@@ -2378,7 +2378,7 @@ export default function App() {
           }
 
           const duration = calcDuration(reviewBlocks, deletedBlockIndices);
-          const cleanTextChars = cleanText.replace(/\s/g, "").length;
+          const cleanTextChars = cleanText.length;
           setReviewData({ hasTrackChanges: true, deletedBlockIndices: [...deletedBlockIndices], blockStrikeRanges, duration, reviewBlocks, cleanTextChars, paragraphs: tcResult.paragraphs, cleanText });
           setBlocks(reviewBlocks); // 0차에서는 전체 블록(삭제 포함) 표시
           setTab("review");
