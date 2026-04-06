@@ -782,14 +782,18 @@ const FN = "'Pretendard','Noto Sans KR',-apple-system,sans-serif";
 const MARKER_COLORS_DARK = {
   yellow: { bg: "rgba(251,191,36,0.3)", border: "#FBBF24", label: "노랑" },
   blue:   { bg: "rgba(59,130,246,0.3)", border: "#3B82F6", label: "파랑" },
+  cyan:   { bg: "rgba(34,211,238,0.3)", border: "#22D3EE", label: "하늘" },
   red:    { bg: "rgba(239,68,68,0.3)",  border: "#EF4444", label: "빨강" },
-  green:  { bg: "rgba(34,197,94,0.3)",  border: "#22C55E", label: "초록" },
+  pink:   { bg: "rgba(236,72,153,0.3)", border: "#EC4899", label: "분홍" },
+  green:  { bg: "rgba(34,197,94,0.3)",  border: "#22C55E", label: "초록", _hidden: true },
 };
 const MARKER_COLORS_LIGHT = {
   yellow: { bg: "rgba(251,191,36,0.22)", border: "#D97706", label: "노랑" },
   blue:   { bg: "rgba(59,130,246,0.22)", border: "#2563EB", label: "파랑" },
+  cyan:   { bg: "rgba(34,211,238,0.22)", border: "#0891B2", label: "하늘" },
   red:    { bg: "rgba(239,68,68,0.22)",  border: "#DC2626", label: "빨강" },
-  green:  { bg: "rgba(34,197,94,0.22)",  border: "#16A34A", label: "초록" },
+  pink:   { bg: "rgba(236,72,153,0.22)", border: "#DB2777", label: "분홍" },
+  green:  { bg: "rgba(34,197,94,0.22)",  border: "#16A34A", label: "초록", _hidden: true },
 };
 let MARKER_COLORS = _savedTheme === "light" ? MARKER_COLORS_LIGHT : MARKER_COLORS_DARK;
 
@@ -3226,7 +3230,7 @@ export default function App() {
                     </div>
                     {/* 형광펜 색상 선택 */}
                     <div style={{display:"flex",gap:2,flexShrink:0}}>
-                      {Object.entries(MARKER_COLORS).map(([colorKey, cv]) => (
+                      {Object.entries(MARKER_COLORS).filter(([,cv]) => !cv._hidden).map(([colorKey, cv]) => (
                         <button key={colorKey} onClick={e=>{e.stopPropagation();
                           if (isActiveMatch && matchingMode.color === colorKey) {
                             // 같은 색 다시 클릭 → 매칭 모드 해제
