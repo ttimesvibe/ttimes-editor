@@ -1898,6 +1898,7 @@ export default function App() {
   const [hlMarkers, setHlMarkers] = useState({}); // { "blockIdx-subtitle": { color: "yellow", ranges: [{s,e}] } }
   const [matchingMode, setMatchingMode] = useState(null); // { key: "blockIdx-subtitle", color: "yellow" } or null
   const [showSessions, setShowSessions] = useState(false); // 세션 목록 모달
+  const [bookmark, setBookmark] = useState(null); // 책갈피 블록 인덱스
 
   const lRef = useRef(null), rRef = useRef(null), syncing = useRef(false), bEls = useRef({});
 
@@ -1905,9 +1906,9 @@ export default function App() {
   useEffect(() => {
     if (blocks.length === 0) return;
     try {
-      localStorage.setItem("td_session", JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, tab, gReady }));
+      localStorage.setItem("td_session", JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, tab, gReady, bookmark }));
     } catch {}
-  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, tab, gReady]);
+  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, tab, gReady, bookmark]);
 
   // ── 앱 마운트 시: URL 공유 파라미터 또는 localStorage 복원 ──
   useEffect(() => {
@@ -1942,6 +1943,7 @@ export default function App() {
             setDiffs(s.diffs || []); setHl(s.hl || []);
             setHlStats(s.hlStats || null); setHlVerdicts(s.hlVerdicts || {}); setHlEdits(s.hlEdits || {}); setHlMarkers(s.hlMarkers || {}); setScriptEdits(s.scriptEdits || {}); setReviewData(s.reviewData || null);
             setFn(s.fn || ""); setTab(s.tab || "correction"); setGReady(s.gReady || false);
+            if (s.bookmark != null) setBookmark(s.bookmark);
           }
         }
       } catch {}
@@ -2081,7 +2083,7 @@ export default function App() {
     if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); autoSaveTimer.current = null; }
     setAutoSaveStatus(""); setLastSavedSnapshot("");
     setBlocks([]); setAnal(null); setDiffs([]); setHl([]); setHlStats(null); setHlVerdicts({}); setHlEdits({}); setHlMarkers({}); setScriptEdits({}); setReviewData(null);
-    setFn(""); setTab("correction"); setGReady(false);
+    setFn(""); setTab("correction"); setGReady(false); setBookmark(null);
     setTermReview(false); setReadOnly(false); setSessionId(null); sessionIdRef.current = null;
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
@@ -2950,7 +2952,42 @@ export default function App() {
         {gReady && <div style={{flex:1,display:"flex",overflow:"hidden"}}>
           <div ref={lRef} data-scroll-container style={{flex:1,overflowY:"auto",borderRight:`1px solid ${C.bd}`}}>
             <div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
-              letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2}}>교정본</div>
+              letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2,
+              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span>교정본</span>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                {bookmark != null && <button onClick={()=>{
+                  const el = bEls.current[`g${bookmark}`];
+                  if (el) el.scrollIntoView({behavior:"smooth",block:"center"});
+                }} style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,border:`1px solid #F59E0B`,
+                  background:"rgba(245,158,11,0.12)",color:"#F59E0B",cursor:"pointer",textTransform:"none",letterSpacing:0}}>
+                  📌 #{bookmark} 이동
+                </button>}
+                <button onClick={()=>{
+                  if (bookmark === aBlock) { setBookmark(null); }
+                  else if (aBlock != null) { setBookmark(aBlock); }
+                  else {
+                    // 현재 스크롤 위치에서 가장 가까운 블록 찾기
+                    const container = lRef.current;
+                    if (!container) return;
+                    const containerTop = container.scrollTop + container.getBoundingClientRect().top;
+                    let closest = 0, minDist = Infinity;
+                    for (const [k, el] of Object.entries(bEls.current)) {
+                      if (!k.startsWith("g")) continue;
+                      const idx = parseInt(k.slice(1));
+                      const dist = Math.abs(el.getBoundingClientRect().top - container.getBoundingClientRect().top);
+                      if (dist < minDist) { minDist = dist; closest = idx; }
+                    }
+                    setBookmark(closest);
+                  }
+                }} style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,
+                  border:`1px solid ${bookmark!=null?"#F59E0B":C.bd}`,
+                  background:bookmark!=null?"rgba(245,158,11,0.12)":"transparent",
+                  color:bookmark!=null?"#F59E0B":C.txM,cursor:"pointer",textTransform:"none",letterSpacing:0}}>
+                  {bookmark != null ? `📌 #{bookmark} 해제` : "📌 책갈피"}
+                </button>
+              </div>
+            </div>
             {matchingMode && <div style={{padding:"6px 16px",background:MARKER_COLORS[matchingMode.color]?.bg,
               borderBottom:`1px solid ${MARKER_COLORS[matchingMode.color]?.border}`,
               display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:28,zIndex:2}}>
@@ -2970,6 +3007,10 @@ export default function App() {
               // 매칭 모드에서 이 블록이 대상인지 확인
               const activeMatchBlock = matchingMode ? matchingMode.blockIdx : null;
               return <div key={idx}>
+              {bookmark === idx && <div style={{padding:"4px 16px",background:"rgba(245,158,11,0.1)",
+                borderBottom:`2px solid #F59E0B`,display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:11,fontWeight:700,color:"#F59E0B"}}>📌 책갈피 — 여기까지 확인함</span>
+              </div>}
               <div ref={el=>{if(el)bEls.current[`g${idx}`]=el}} onClick={()=>scrollTo(idx)}
                 style={{padding:"10px 16px",
                   borderLeft:`4px solid ${aBlock===idx?"#A855F7":hasScriptEdit?"#22C55E":"transparent"}`,
