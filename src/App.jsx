@@ -1911,6 +1911,7 @@ export default function App() {
   const [hlEdits, setHlEdits] = useState({}); // { "blockIndex-subtitle": "수정된 텍스트" }
   const [scriptEdits, setScriptEdits] = useState({}); // { blockIndex: "수동 편집된 텍스트" } — 1.5단계
   const [subtitleCache, setSubtitleCache] = useState(null); // AI 자막 포맷팅 결과 캐시
+  const [subtitleResult, setSubtitleResult] = useState(null); // 2패널 표시용 자막 결과
   const [reviewData, setReviewData] = useState(null); // 0차: { paragraphs, hasTrackChanges, deletedBlockIndices, duration }
   const [addingAt, setAddingAt] = useState(null); // 자막 추가 중인 block_index
   const [addForm, setAddForm] = useState({ subtitle: "", type: "A1" }); // 추가 폼 상태
@@ -2021,6 +2022,18 @@ export default function App() {
         container.scrollTo({ top: offset, behavior: 'smooth' });
       } else {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+    // 1차 교정 탭: 반대편 패널도 스크롤 (좌→우, 우→좌)
+    const otherKey = bEls.current[`l${i}`] === el ? `r${i}` : `l${i}`;
+    const otherEl = bEls.current[otherKey];
+    if (otherEl && otherEl !== el) {
+      const container = otherEl.closest('[data-scroll-container]');
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        const elRect = otherEl.getBoundingClientRect();
+        const offset = elRect.top - containerRect.top + container.scrollTop - containerRect.height / 3;
+        container.scrollTo({ top: offset, behavior: 'smooth' });
       }
     }
     // 편집 가이드: 오른쪽 강조자막 패널도 해당 블록의 자막으로 스크롤
@@ -2767,9 +2780,9 @@ export default function App() {
                 onSave={val => {
                   if (val !== null) setScriptEdits(prev=>({...prev,[idx]:val}));
                   else setScriptEdits(prev=>{const n={...prev};delete n[idx];return n;});
-                  setSubtitleCache(null);
+                  setSubtitleCache(null); setSubtitleResult(null);
                 }}
-                onRevert={() => { setScriptEdits(prev=>{const n={...prev};delete n[idx];return n;}); setSubtitleCache(null); }}
+                onRevert={() => { setScriptEdits(prev=>{const n={...prev};delete n[idx];return n;}); setSubtitleCache(null); setSubtitleResult(null); }}
               />;
             })}
           </div>
@@ -2901,16 +2914,9 @@ export default function App() {
           const btn = e.currentTarget;
           const origBtnText = btn.textContent;
 
-          // 캐시가 있으면 바로 복사
+          // 캐시가 있으면 2패널 표시 (이미 결과가 있으면 바로 보여줌)
           if (subtitleCache) {
-            try { await navigator.clipboard.writeText(subtitleCache); } catch {
-              const ta = document.createElement("textarea");
-              ta.value = subtitleCache; ta.style.cssText = "position:fixed;left:-9999px";
-              document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
-            }
-            btn.textContent = "✅ 자막 복사됨!";
-            btn.style.background = "rgba(34,197,94,0.3)";
-            setTimeout(() => { btn.textContent = origBtnText; btn.style.background = `linear-gradient(135deg,${C.ac},#7C3AED)`; }, 1500);
+            setSubtitleResult(subtitleCache);
             return;
           }
 
@@ -2918,7 +2924,6 @@ export default function App() {
           btn.style.opacity = "0.7";
           btn.disabled = true;
           try {
-            // 1) 모든 블록 텍스트를 합침
             const allTexts = blocks.map(b => {
               const idx = b.index;
               if (scriptEdits[idx] !== undefined) return scriptEdits[idx];
@@ -2926,7 +2931,6 @@ export default function App() {
             });
             const mergedText = allTexts.join('\n');
 
-            // 2) ~2000자씩 줄바꿈(\n) 기준으로 분할
             const CHUNK_LIMIT = 2000;
             const allLines = mergedText.split('\n');
             const chunks = [];
@@ -2941,7 +2945,6 @@ export default function App() {
             }
             if (currentChunk) chunks.push(currentChunk);
 
-            // 3) 각 청크를 nano에게 보내고 결과 합침
             const formattedChunks = [];
             for (let ci = 0; ci < chunks.length; ci++) {
               const pct = Math.round((ci / chunks.length) * 100);
@@ -2949,25 +2952,17 @@ export default function App() {
               const d = await apiCall("subtitle-format", { blocks: [{ index: ci, text: chunks[ci] }] }, cfg);
               const formatted = d.blocks || [];
               formattedChunks.push(formatted[0]?.text || chunks[ci]);
-              // 청크 간 rate limit 보호
               if (ci < chunks.length - 1) await delay(1000);
             }
 
-            // 4) 합치고 후처리
             const aiText = formattedChunks.join('\n');
             const finalText = postProcessSubtitle(aiText);
 
-            // 캐시에 저장
             setSubtitleCache(finalText);
+            setSubtitleResult(finalText); // 2패널로 표시
 
-            try { await navigator.clipboard.writeText(finalText); } catch {
-              const ta = document.createElement("textarea");
-              ta.value = finalText; ta.style.cssText = "position:fixed;left:-9999px";
-              document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
-            }
-            btn.textContent = "✅ 자막 복사됨!";
-            btn.style.background = "rgba(34,197,94,0.3)";
-            setTimeout(() => { btn.textContent = origBtnText; btn.style.background = `linear-gradient(135deg,${C.ac},#7C3AED)`; btn.style.opacity = "1"; }, 2000);
+            btn.textContent = origBtnText;
+            btn.style.opacity = "1";
           } catch (err) {
             btn.textContent = "❌ 실패";
             console.error("자막 포맷팅 실패:", err);
@@ -2976,7 +2971,8 @@ export default function App() {
             btn.disabled = false;
           }
         };
-        return <>
+        return <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+          <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{flex:1,overflowY:"auto",padding:0}}>
             <div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
               letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2,
@@ -2996,9 +2992,9 @@ export default function App() {
                 onSave={val => {
                   if (val !== null) setScriptEdits(prev=>({...prev,[idx]:val}));
                   else setScriptEdits(prev=>{const n={...prev};delete n[idx];return n;});
-                  setSubtitleCache(null);
+                  setSubtitleCache(null); setSubtitleResult(null);
                 }}
-                onRevert={() => { setScriptEdits(prev=>{const n={...prev};delete n[idx];return n;}); setSubtitleCache(null); }}
+                onRevert={() => { setScriptEdits(prev=>{const n={...prev};delete n[idx];return n;}); setSubtitleCache(null); setSubtitleResult(null); }}
               />;
             })}
           </div>
@@ -3021,7 +3017,33 @@ export default function App() {
               🎬 자막용 복사
             </button>
           </div>
-        </>;
+          </div>
+          {/* 자막 2패널 — 우측 */}
+          {subtitleResult && <div style={{width:420,minWidth:420,borderLeft:`1px solid ${C.bd}`,
+            display:"flex",flexDirection:"column",background:"rgba(0,0,0,0.08)"}}>
+            <div style={{padding:"8px 14px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
+              letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>자막 포맷팅 결과</span>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={async()=>{
+                  try { await navigator.clipboard.writeText(subtitleResult); } catch {
+                    const ta = document.createElement("textarea");
+                    ta.value = subtitleResult; ta.style.cssText = "position:fixed;left:-9999px";
+                    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+                  }
+                }} style={{fontSize:10,fontWeight:600,padding:"3px 10px",borderRadius:4,border:`1px solid ${C.bd}`,
+                  background:"rgba(255,255,255,0.06)",color:C.txM,cursor:"pointer"}}>📋 복사</button>
+                <button onClick={()=>setSubtitleResult(null)}
+                  style={{fontSize:10,fontWeight:600,padding:"3px 8px",borderRadius:4,border:`1px solid ${C.bd}`,
+                    background:"rgba(255,255,255,0.06)",color:C.txD,cursor:"pointer"}}>✕ 닫기</button>
+              </div>
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:"12px 16px"}}>
+              <pre style={{fontSize:13,color:C.tx,lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word",
+                fontFamily:FN,margin:0}}>{subtitleResult}</pre>
+            </div>
+          </div>}
+        </div>;
       })()}
 
       {/* 편집 가이드 */}
