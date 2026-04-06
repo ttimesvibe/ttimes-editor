@@ -884,17 +884,18 @@ function MarkedText({ text, blockIdx, hlMarkers, matchingMode, onMarkerAdd }) {
 // ── 유형 코드 배지 ──
 function TypeBadge({ type }) {
   if (!type) return null;
-  const colors = {
-    A: { bg: "rgba(251,191,36,0.15)", tx: "#FBBF24" },
-    B: { bg: "rgba(59,130,246,0.15)", tx: "#3B82F6" },
-    C: { bg: "rgba(34,197,94,0.15)", tx: "#22C55E" },
-    D: { bg: "rgba(239,68,68,0.15)", tx: "#EF4444" },
-    E: { bg: "rgba(168,85,247,0.15)", tx: "#A855F7" },
+  // 카테고리별 라벨 & 색상
+  const labelMap = {
+    A: { label: "자막", bg: "rgba(34,197,94,0.15)", tx: "#22C55E" },
+    B: { label: "용어 설명", bg: "rgba(59,130,246,0.15)", tx: "#3B82F6" },
+    C: { label: "자료", bg: "rgba(249,115,22,0.15)", tx: "#F97316" },
+    D: { label: "자막", bg: "rgba(34,197,94,0.15)", tx: "#22C55E" },
+    E: { label: "자막", bg: "rgba(34,197,94,0.15)", tx: "#22C55E" },
   };
   const cat = type.charAt(0);
-  const c = colors[cat] || { bg: "rgba(255,255,255,0.08)", tx: C.txM };
+  const c = labelMap[cat] || { label: "자막", bg: "rgba(255,255,255,0.08)", tx: C.txM };
   return <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,
-    background:c.bg,color:c.tx,letterSpacing:"0.03em"}}>{type}</span>;
+    background:c.bg,color:c.tx,letterSpacing:"0.03em"}}>{c.label}</span>;
 }
 
 function BlockView({ block, pos, side, active, onClick, bRef, showIndex }) {
@@ -2140,7 +2141,7 @@ export default function App() {
       source_text: "",
       subtitle: addForm.subtitle.trim(),
       type: addForm.type,
-      type_name: addForm.type === "B2" ? "용어 설명형" : "수동 추가",
+      type_name: addForm.type === "B2" ? "용어 설명형" : addForm.type === "C1" ? "자료" : "수동 추가",
       reason: "편집자 수동 추가",
       placement_hint: null,
       sequence_id: null,
@@ -2949,10 +2950,14 @@ export default function App() {
                   const markerColor = marker?.color;
                   const mc = markerColor ? MARKER_COLORS[markerColor] : null;
                   const isActiveMatch = matchingMode?.key === gKey;
+                  // 타입별 기본 색상
+                  const typeColor = g.type?.charAt(0) === "C" ? "#F97316" : g.type?.charAt(0) === "B" ? "#3B82F6" : "#22C55E";
+                  const typeBgLight = g.type?.charAt(0) === "C" ? "rgba(249,115,22,0.06)" : g.type?.charAt(0) === "B" ? "rgba(59,130,246,0.06)" : "rgba(34,197,94,0.06)";
+                  const typeBorder = g.type?.charAt(0) === "C" ? "rgba(249,115,22,0.3)" : g.type?.charAt(0) === "B" ? "rgba(59,130,246,0.3)" : "rgba(34,197,94,0.3)";
 
                   return <div key={`inline-${gi}`} style={{margin:"2px 16px 4px",padding:"8px 12px",borderRadius:8,
-                    border:`1px solid ${mc ? mc.border : "rgba(34,197,94,0.3)"}`,
-                    background:mc ? mc.bg.replace("0.3","0.08") : "rgba(34,197,94,0.06)",
+                    border:`1px solid ${mc ? mc.border : typeBorder}`,
+                    background:mc ? mc.bg.replace("0.3","0.08") : typeBgLight,
                     display:"flex",alignItems:"center",gap:8,
                     boxShadow:isActiveMatch?`0 0 0 2px ${mc?.border||C.ac}`:"none",
                     transition:"all 0.15s"}}>
@@ -2969,9 +2974,9 @@ export default function App() {
                           background:canDown?"rgba(255,255,255,0.08)":"transparent",
                           color:canDown?C.txM:"transparent",cursor:canDown?"pointer":"default"}}>▼</button>
                     </div>}
-                    <span style={{fontSize:11,color:mc?.border||"#22C55E",fontWeight:700,flexShrink:0}}>▶</span>
+                    <span style={{fontSize:11,color:mc?.border||typeColor,fontWeight:700,flexShrink:0}}>▶</span>
                     <TypeBadge type={g.type}/>
-                    <div style={{flex:1,fontSize:13,fontWeight:500,color:mc?.border||"#22C55E",lineHeight:1.4,whiteSpace:"pre-line"}}>
+                    <div style={{flex:1,fontSize:13,fontWeight:500,color:mc?.border||typeColor,lineHeight:1.4,whiteSpace:"pre-line"}}>
                       {displaySubtitle}
                     </div>
                     {/* 형광펜 색상 선택 */}
@@ -3025,7 +3030,7 @@ export default function App() {
                 <div onClick={e=>e.stopPropagation()} style={{margin:"0 16px 10px",padding:12,borderRadius:10,
                   border:`1px solid ${C.hBd}`,background:"rgba(168,85,247,0.06)"}}>
                   <div style={{display:"flex",gap:6,marginBottom:8}}>
-                    {[["A1","강조자막"],["B2","용어 설명"]].map(([t,l])=>
+                    {[["A1","강조자막"],["B2","용어 설명"],["C1","자료"]].map(([t,l])=>
                       <button key={t} onClick={()=>setAddForm(f=>({...f,type:t}))}
                         style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,cursor:"pointer",
                           border:`1px solid ${addForm.type===t?C.hBd:"transparent"}`,
@@ -3048,7 +3053,7 @@ export default function App() {
                     </div>
                   )}
                   <textarea value={addForm.subtitle} onChange={e=>setAddForm(f=>({...f,subtitle:e.target.value}))}
-                    placeholder={addForm.type==="B2"?"용어(English) : 설명":"강조자막 내용"}
+                    placeholder={addForm.type==="B2"?"용어(English) : 설명":addForm.type==="C1"?"자료 내용 (예: 관련 기사 캡쳐 이미지)":"강조자막 내용"}
                     rows={2} autoFocus={addForm.type!=="B2"}
                     style={{width:"100%",padding:"6px 8px",borderRadius:6,border:`1px solid ${C.bd}`,
                       background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,fontFamily:"'Pretendard',sans-serif",
