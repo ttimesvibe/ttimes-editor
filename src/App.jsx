@@ -1679,6 +1679,36 @@ function SettingsModal({ config, onSave, onClose }) {
 // TERM REVIEW SCREEN
 // ═══════════════════════════════════════════════
 
+function EditorialSummaryPanel({ summary, collapsed, onToggle }) {
+  if (!summary) return null;
+  return <div style={{background:C.sf,borderRadius:12,border:`1px solid ${C.bd}`,overflow:"hidden",marginBottom:16}}>
+    <div onClick={onToggle} style={{padding:"14px 16px",borderBottom:collapsed?"none":`1px solid ${C.bd}`,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+      <span style={{fontSize:15,fontWeight:700,color:C.tx}}>📋 콘텐츠 요약</span>
+      <span style={{fontSize:12,color:C.txD}}>{collapsed?"▸ 펼치기":"▾ 접기"}</span>
+    </div>
+    {!collapsed && <div style={{padding:16}}>
+      {summary.one_liner && <div style={{fontSize:17,fontWeight:700,color:C.tx,marginBottom:14,lineHeight:1.5}}>{summary.one_liner}</div>}
+      {summary.key_points?.length > 0 && <div style={{marginBottom:14}}>
+        <div style={{fontSize:13,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>핵심 논점</div>
+        {summary.key_points.map((p,i) => <div key={i} style={{fontSize:15,color:C.txM,lineHeight:1.6,paddingLeft:12,
+          borderLeft:`3px solid ${C.ac}`,marginBottom:8}}>{p}</div>)}
+      </div>}
+      {summary.notable_quotes?.length > 0 && <div style={{marginBottom:14}}>
+        <div style={{fontSize:13,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>핵심 발언</div>
+        {summary.notable_quotes.map((q,i) => <div key={i} style={{fontSize:15,color:C.tx,lineHeight:1.6,marginBottom:10,
+          padding:"10px 14px",background:"rgba(255,255,255,0.04)",borderRadius:8,borderLeft:`3px solid ${C.fTx||C.ac}`}}>
+          <div style={{fontSize:12,color:C.fTx||C.ac,fontWeight:600,marginBottom:4}}>{q.speaker||""}</div>
+          <div style={{fontStyle:"italic"}}>"{q.quote||q}"</div>
+        </div>)}
+      </div>}
+      {summary.editor_notes && <div>
+        <div style={{fontSize:13,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>편집 참고</div>
+        <div style={{fontSize:14,color:C.txM,lineHeight:1.6,padding:"8px 12px",background:"rgba(255,255,255,0.04)",borderRadius:6}}>{summary.editor_notes}</div>
+      </div>}
+    </div>}
+  </div>;
+}
+
 function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) {
   const [terms, setTerms] = useState(initialTerms);
   const [newWord, setNewWord] = useState("");
@@ -1689,6 +1719,7 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
   });
   const [dictEditIdx, setDictEditIdx] = useState(-1);
   const [dictEditVal, setDictEditVal] = useState("");
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
 
   const update = (i, field, val) =>
     setTerms(prev => prev.map((t, idx) => idx === i ? { ...t, [field]: val } : t));
@@ -1743,6 +1774,57 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
           AI가 발견한 STT 오인식 후보입니다. 확인 후 교정을 시작하세요.
         </div>
       </div>
+
+      {/* Step 0에서 발견된 오인식 매핑 테이블 (최상단) */}
+      <div style={{background:C.sf,borderRadius:12,border:`1px solid ${C.bd}`,overflow:"hidden",marginBottom:16}}>
+        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.bd}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:12,fontWeight:700,color:C.txM}}>AI 발견 오인식 후보</span>
+          <span style={{fontSize:11,color:C.txD}}>{terms.length}건</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"60px 1fr 24px 1fr 36px",gap:8,padding:"8px 14px",
+          borderBottom:`1px solid ${C.bd}`,fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em"}}>
+          <span>신뢰도</span><span>원문 (오인식)</span><span></span><span>교정값</span><span></span>
+        </div>
+        {terms.length === 0 && <div style={{padding:"24px",textAlign:"center",fontSize:13,color:C.txD}}>
+          항목 없음 — AI가 신규 오인식 후보를 찾지 못했습니다.
+        </div>}
+        {terms.map((t, i) => (
+          <div key={i} style={{display:"grid",gridTemplateColumns:"60px 1fr 24px 1fr 36px",gap:8,
+            padding:"8px 14px",borderBottom:`1px solid ${C.bd}`,alignItems:"center"}}>
+            <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,textAlign:"center",
+              background:`${confColor(t.confidence)}22`,color:confColor(t.confidence)}}>
+              {confLabel(t.confidence)}
+            </span>
+            <input value={t.wrong} onChange={e=>update(i,"wrong",e.target.value)} style={iS} placeholder="오인식 단어"/>
+            <span style={{textAlign:"center",color:C.txD,fontSize:14}}>→</span>
+            <input value={t.correct} onChange={e=>update(i,"correct",e.target.value)} style={iS} placeholder="올바른 표기"/>
+            <button onClick={()=>remove(i)} style={{background:"none",border:"none",color:C.txD,cursor:"pointer",
+              fontSize:16,padding:0,textAlign:"center"}} title="삭제">✕</button>
+          </div>
+        ))}
+        <div style={{padding:"10px 14px"}}>
+          <button onClick={add} style={{background:"none",border:`1px dashed ${C.bd}`,borderRadius:6,
+            color:C.txM,fontSize:12,cursor:"pointer",padding:"6px 14px",width:"100%"}}>
+            + 항목 추가
+          </button>
+        </div>
+      </div>
+
+      {/* 확인/건너뛰기 버튼 */}
+      <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:20}}>
+        <button onClick={onSkip} style={{padding:"9px 20px",borderRadius:8,border:`1px solid ${C.bd}`,
+          background:"transparent",color:C.txM,fontSize:13,cursor:"pointer"}}>
+          용어 교정 없이 진행
+        </button>
+        <button onClick={confirm} style={{padding:"9px 24px",borderRadius:8,border:"none",
+          background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:13,fontWeight:700,
+          cursor:"pointer",boxShadow:"0 4px 14px rgba(74,108,247,0.3)"}}>
+          교정 확정 → 1차 교정 시작
+        </button>
+      </div>
+
+      {/* 콘텐츠 요약 */}
+      <EditorialSummaryPanel summary={analysis?.editorial_summary} collapsed={summaryCollapsed} onToggle={()=>setSummaryCollapsed(!summaryCollapsed)}/>
 
       {/* 팀 단어장 (정답 표기 목록) — 삭제/수정 가능 */}
       {dictWords.length > 0 && (
@@ -1799,52 +1881,6 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
         </div>
       </div>
 
-      {/* Step 0에서 발견된 오인식 매핑 테이블 */}
-      <div style={{background:C.sf,borderRadius:12,border:`1px solid ${C.bd}`,overflow:"hidden",marginBottom:16}}>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.bd}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:12,fontWeight:700,color:C.txM}}>AI 발견 오인식 후보</span>
-          <span style={{fontSize:11,color:C.txD}}>{terms.length}건</span>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"60px 1fr 24px 1fr 36px",gap:8,padding:"8px 14px",
-          borderBottom:`1px solid ${C.bd}`,fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em"}}>
-          <span>신뢰도</span><span>원문 (오인식)</span><span></span><span>교정값</span><span></span>
-        </div>
-        {terms.length === 0 && <div style={{padding:"24px",textAlign:"center",fontSize:13,color:C.txD}}>
-          항목 없음 — AI가 신규 오인식 후보를 찾지 못했습니다.
-        </div>}
-        {terms.map((t, i) => (
-          <div key={i} style={{display:"grid",gridTemplateColumns:"60px 1fr 24px 1fr 36px",gap:8,
-            padding:"8px 14px",borderBottom:`1px solid ${C.bd}`,alignItems:"center"}}>
-            <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,textAlign:"center",
-              background:`${confColor(t.confidence)}22`,color:confColor(t.confidence)}}>
-              {confLabel(t.confidence)}
-            </span>
-            <input value={t.wrong} onChange={e=>update(i,"wrong",e.target.value)} style={iS} placeholder="오인식 단어"/>
-            <span style={{textAlign:"center",color:C.txD,fontSize:14}}>→</span>
-            <input value={t.correct} onChange={e=>update(i,"correct",e.target.value)} style={iS} placeholder="올바른 표기"/>
-            <button onClick={()=>remove(i)} style={{background:"none",border:"none",color:C.txD,cursor:"pointer",
-              fontSize:16,padding:0,textAlign:"center"}} title="삭제">✕</button>
-          </div>
-        ))}
-        <div style={{padding:"10px 14px"}}>
-          <button onClick={add} style={{background:"none",border:`1px dashed ${C.bd}`,borderRadius:6,
-            color:C.txM,fontSize:12,cursor:"pointer",padding:"6px 14px",width:"100%"}}>
-            + 항목 추가
-          </button>
-        </div>
-      </div>
-
-      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-        <button onClick={onSkip} style={{padding:"9px 20px",borderRadius:8,border:`1px solid ${C.bd}`,
-          background:"transparent",color:C.txM,fontSize:13,cursor:"pointer"}}>
-          용어 교정 없이 진행
-        </button>
-        <button onClick={confirm} style={{padding:"9px 24px",borderRadius:8,border:"none",
-          background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:13,fontWeight:700,
-          cursor:"pointer",boxShadow:"0 4px 14px rgba(74,108,247,0.3)"}}>
-          교정 확정 → 1차 교정 시작
-        </button>
-      </div>
     </div>
   </div>;
 }
@@ -1882,6 +1918,8 @@ export default function App() {
   const [prog, setProg] = useState({p:0,l:""});
   const [gReady, setGReady] = useState(false);
   const [gBusy, setGBusy] = useState(false);
+  const [partialBusy, setPartialBusy] = useState(false); // 부분 생성 로딩
+  const [selPopup, setSelPopup] = useState(null); // { blockIdx, text, x, y }
   const [aBlock, setABlock] = useState(null);
   const [showSet, setShowSet] = useState(false);
   const [err, setErr] = useState(null);
@@ -2351,6 +2389,50 @@ export default function App() {
     finally { setGBusy(false); }
   },[blocks,anal,cfg,autoSaveToKV]);
 
+  // ── 부분 강조자막 생성 (텍스트 드래그 → 해당 블록만 생성) ──
+  const handlePartialGenerate = useCallback(async (blockIdx, selectedText) => {
+    setPartialBusy(true); setErr(null); setSelPopup(null);
+    try {
+      // 앞뒤 3블록 컨텍스트 포함
+      const ctxRange = 3;
+      const startIdx = Math.max(0, blockIdx - ctxRange);
+      const endIdx = Math.min(blocks.length - 1, blockIdx + ctxRange);
+      const contextBlocks = blocks.slice(startIdx, endIdx + 1);
+      const targetIndices = [blockIdx];
+
+      // 최대 3개 자막
+      const maxItems = 3;
+
+      const body = {
+        mode: "draft",
+        blocks: contextBlocks,
+        analysis: anal,
+        target_block_indices: targetIndices,
+        max_items: maxItems,
+        selected_text: selectedText,
+      };
+
+      const d = await apiCall("highlights", body, cfg);
+      const partialHl = d?.result?.highlights || [];
+
+      if (partialHl.length > 0) {
+        // 타겟 블록 결과만 필터 + 상한 적용
+        const filtered = partialHl
+          .filter(h => targetIndices.includes(h.block_index))
+          .slice(0, maxItems);
+        // 수동 생성 표시 추가
+        const marked = filtered.map(h => ({ ...h, _manual: true }));
+        setHl(prev => [...prev, ...marked]);
+      } else {
+        setErr("이 구간에서 강조자막 후보를 찾지 못했습니다.");
+      }
+    } catch (e) {
+      setErr(`부분 생성 오류: ${e.message}`);
+    } finally {
+      setPartialBusy(false);
+    }
+  }, [blocks, anal, cfg]);
+
   const dm = useMemo(()=>{ const m={}; for(const d of diffs) { if(!m[d.block_index]) m[d.block_index]=[]; m[d.block_index].push(...d.changes); } return m; },[diffs]);
 
   const guides = useMemo(()=>{
@@ -2537,6 +2619,9 @@ export default function App() {
     </div>}
 
     {(busy||gBusy) && <div style={{padding:"0 20px",flexShrink:0}}><Progress pct={prog.p} label={prog.l}/></div>}
+    {(busy||gBusy) && anal?.editorial_summary && <div style={{padding:"0 20px 12px",flexShrink:0,maxWidth:660,margin:"0 auto",width:"100%"}}>
+      <EditorialSummaryPanel summary={anal.editorial_summary} collapsed={!anal.editorial_summary} onToggle={()=>{}}/>
+    </div>}
 
     <main style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* TERM REVIEW */}
@@ -2942,12 +3027,20 @@ export default function App() {
           <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:16,
             background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.2)",fontSize:12,color:C.ok,marginBottom:20}}>
             ✅ 1차 교정 완료 — 필러 {fC}건, 용어 {tC}건</div>
-          <div><button onClick={handleGuide} style={{padding:"12px 28px",borderRadius:10,border:"none",
-            background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:15,fontWeight:700,
-            cursor:"pointer",boxShadow:"0 4px 16px rgba(74,108,247,0.3)"}}>▶ 강조자막 생성하기 (2-Pass)</button></div>
-          <p style={{marginTop:10,fontSize:12,color:C.txD}}>
-            Draft Agent가 후보를 넉넉히 생성 → Editor Agent가 검증·선별
-          </p>
+          <div style={{display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap",maxWidth:560,margin:"0 auto"}}>
+            <div onClick={handleGuide} style={{flex:1,minWidth:220,padding:24,borderRadius:14,border:`2px solid ${C.ac}`,
+              background:`${C.ac}11`,cursor:"pointer",textAlign:"left",transition:"all .15s"}}>
+              <div style={{fontSize:16,fontWeight:700,color:C.tx,marginBottom:8}}>▶ 강조자막 생성하기</div>
+              <div style={{fontSize:13,color:C.txM,lineHeight:1.5}}>AI가 일괄 생성하는 강조자막 프로세스</div>
+              <div style={{fontSize:11,color:C.txD,marginTop:6}}>Draft Agent → Editor Agent (2-Pass)</div>
+            </div>
+            <div onClick={()=>{setTab("guide"); setGReady(true);}} style={{flex:1,minWidth:220,padding:24,borderRadius:14,border:`2px solid ${C.bd}`,
+              background:C.sf,cursor:"pointer",textAlign:"left",transition:"all .15s"}}>
+              <div style={{fontSize:16,fontWeight:700,color:C.tx,marginBottom:8}}>✏️ 내가 직접 편집하기</div>
+              <div style={{fontSize:13,color:C.txM,lineHeight:1.5}}>편집자가 직접 읽으면서 강조자막을 부분 생성할 수 있습니다</div>
+              <div style={{fontSize:11,color:C.txD,marginTop:6}}>텍스트 드래그 → 부분 생성</div>
+            </div>
+          </div>
         </div>}
         {gReady && <div style={{flex:1,display:"flex",overflow:"hidden"}}>
           <div ref={lRef} data-scroll-container style={{flex:1,overflowY:"auto",borderRight:`1px solid ${C.bd}`}}>
@@ -3012,6 +3105,13 @@ export default function App() {
                 <span style={{fontSize:11,fontWeight:700,color:"#F59E0B"}}>📌 책갈피 — 여기까지 확인함</span>
               </div>}
               <div ref={el=>{if(el)bEls.current[`g${idx}`]=el}} onClick={()=>scrollTo(idx)}
+                onMouseUp={(e)=>{
+                  const sel = window.getSelection();
+                  const txt = sel?.toString()?.trim();
+                  if (txt && txt.length >= 5) {
+                    setSelPopup({ blockIdx: idx, text: txt, x: e.clientX, y: e.clientY });
+                  }
+                }}
                 style={{padding:"10px 16px",
                   borderLeft:`4px solid ${aBlock===idx?"#A855F7":hasScriptEdit?"#22C55E":"transparent"}`,
                   background:aBlock===idx?"rgba(168,85,247,0.08)":hasScriptEdit?"rgba(34,197,94,0.04)":"transparent",
@@ -3183,12 +3283,35 @@ export default function App() {
                 </div>
               )}
             </div>})}
+          {/* 텍스트 선택 팝업 */}
+          {selPopup && <div style={{position:"fixed",left:selPopup.x-60,top:selPopup.y-50,zIndex:100,
+            background:C.sf,border:`2px solid ${C.ac}`,borderRadius:10,padding:"8px 12px",
+            boxShadow:"0 6px 20px rgba(0,0,0,0.4)",display:"flex",gap:8,alignItems:"center"}}>
+            <button onClick={()=>handlePartialGenerate(selPopup.blockIdx, selPopup.text)}
+              disabled={partialBusy}
+              style={{padding:"6px 14px",borderRadius:6,border:"none",
+                background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:12,fontWeight:700,
+                cursor:partialBusy?"wait":"pointer",opacity:partialBusy?0.6:1}}>
+              {partialBusy ? "⏳ 생성 중..." : "✨ 이 구간으로 자막 생성"}
+            </button>
+            <button onClick={()=>setSelPopup(null)}
+              style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:14}}>✕</button>
+          </div>}
+          {partialBusy && <div style={{padding:"8px 16px",background:"rgba(74,108,247,0.1)",
+            borderTop:`1px solid ${C.ac}`,fontSize:12,color:C.ac,textAlign:"center"}}>
+            ⏳ 부분 강조자막 생성 중...
+          </div>}
           </div>
           <div ref={rRef} data-scroll-container style={{width:400,minWidth:400,overflowY:"auto",background:"rgba(0,0,0,0.12)"}}>
             <div style={{padding:"8px 14px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
               letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.sf,zIndex:2,
               display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span>강조자막 가이드</span>
+              {!guides.length && !gBusy && <button onClick={handleGuide}
+                style={{fontSize:10,fontWeight:600,padding:"3px 10px",borderRadius:5,border:"none",
+                  background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",cursor:"pointer"}}>
+                일괄 생성하기
+              </button>}
             </div>
             <div style={{padding:"6px 10px"}}>
               {!guides.length && <p style={{padding:20,textAlign:"center",fontSize:12,color:C.txD}}>항목 없음</p>}
