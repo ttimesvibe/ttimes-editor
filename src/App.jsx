@@ -2939,19 +2939,21 @@ export default function App() {
               if (scriptEdits[idx] !== undefined) return scriptEdits[idx];
               return getCorrectedText(b.text, dm[idx]);
             });
-            const mergedText = allTexts.join('\n');
 
+            // 블록(=화자 턴) 단위로 묶어서 청크 분할 — 화자 턴 중간에서 끊지 않음
             const CHUNK_LIMIT = 2000;
-            const allLines = mergedText.split('\n');
             const chunks = [];
             let currentChunk = "";
-            for (const line of allLines) {
-              if (currentChunk.length + line.length + 1 > CHUNK_LIMIT && currentChunk.length > 0) {
+            let lastBlock = "";
+            for (const blockText of allTexts) {
+              if (currentChunk.length + blockText.length + 1 > CHUNK_LIMIT && currentChunk.length > 0) {
                 chunks.push(currentChunk);
-                currentChunk = line;
+                // overlap: 이전 chunk 마지막 블록을 context로 포함
+                currentChunk = lastBlock + '\n' + blockText;
               } else {
-                currentChunk += (currentChunk ? '\n' : '') + line;
+                currentChunk += (currentChunk ? '\n' : '') + blockText;
               }
+              lastBlock = blockText;
             }
             if (currentChunk) chunks.push(currentChunk);
 
