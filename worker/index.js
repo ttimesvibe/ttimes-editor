@@ -181,7 +181,20 @@ async function handleDictPost(body, env, headers) {
 // ═══════════════════════════════════════
 
 async function callOpenAI(systemPrompt, userMessage, env, options = {}) {
-  const { temperature = 0.1, max_tokens = 16000, model = "gpt-5.1" } = options;
+  const { temperature = 0.1, max_tokens = 16000, model = "gpt-5.1", useJsonFormat = true } = options;
+
+  const reqBody = {
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
+    ],
+    temperature,
+    max_completion_tokens: max_tokens,
+  };
+  if (useJsonFormat) {
+    reqBody.response_format = { type: "json_object" };
+  }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -189,16 +202,7 @@ async function callOpenAI(systemPrompt, userMessage, env, options = {}) {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
     },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      temperature,
-      max_completion_tokens: max_tokens,
-      response_format: { type: "json_object" },
-    }),
+    body: JSON.stringify(reqBody),
   });
 
   if (response.status === 429) {
@@ -992,6 +996,7 @@ async function handleSubtitleFormat(body, env, headers) {
     temperature: 0.1,
     max_tokens: 8000,
     model: "gpt-5.4-mini",
+    useJsonFormat: false,
   });
 
   if (result.error) {
