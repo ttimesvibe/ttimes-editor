@@ -2995,6 +2995,7 @@ export default function App() {
               const pct = Math.round((ci / chunks.length) * 100);
               btn.textContent = `⏳ AI 포맷팅 중 (${pct}%)...`;
               const d = await apiCall("subtitle-format", { blocks: [{ index: ci, text: chunks[ci] }] }, cfg);
+              if (d._debug) console.log(`[자막 DEBUG] chunk ${ci}:`, d._debug);
               const formatted = d.blocks || [];
               const resultText = formatted[0]?.text || "";
 

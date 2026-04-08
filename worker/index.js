@@ -999,8 +999,19 @@ async function handleSubtitleFormat(body, env, headers) {
     useJsonFormat: false,
   });
 
+  // 디버그 정보 수집
+  const _debug = {
+    contentType: result.content ? typeof result.content : null,
+    contentKeys: result.content && typeof result.content === "object" ? Object.keys(result.content) : null,
+    contentPreview: result.content ? JSON.stringify(result.content).substring(0, 500) : null,
+    finishReason: result.finish_reason || null,
+    inputLength: fullText.length,
+    outputLength: null,
+    error: result.error || null,
+  };
+
   if (result.error) {
-    return new Response(JSON.stringify({ error: result.error }), {
+    return new Response(JSON.stringify({ error: result.error, _debug }), {
       status: result.status || 500, headers
     });
   }
@@ -1016,10 +1027,13 @@ async function handleSubtitleFormat(body, env, headers) {
     finalText = fullText; // fallback: 원본 그대로
   }
 
+  _debug.outputLength = finalText.length;
+
   return new Response(JSON.stringify({
     success: true,
     blocks: [{ index: 0, text: finalText }],
     usage: result.usage || {},
+    _debug,
   }), { headers });
 }
 
