@@ -1,15 +1,17 @@
-name = "ttimes-editor"
+name = "ttimes-edit"
 main = "index.js"
 compatibility_date = "2024-01-01"
 
-# US region placement (Cloudflare AI Gateway 등 호환)
-[placement]
-mode = "smart"
+# ⚠️ [placement] 절대 추가 금지!
+# wrangler deploy 시 대시보드 Region 설정이 덮어씌워짐
+# Region은 Cloudflare 대시보드에서 수동 설정 (GCP US)
 
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "KV_ID_여기에_입력"   # wrangler kv:namespace create SESSIONS 로 생성 후 교체
+id = "KV_ID_여기에_입력"
+# ttimes-doctor KV 공유 시: b91de13be69045e59941b1ff000ffa0a
+# ttimes-edit 기존 KV 사용 시: 대시보드에서 확인
 
-# Secrets (wrangler secret put 으로 설정):
+# Secrets (이미 설정됨, wrangler secret put 으로 변경 가능):
 # - OPENAI_API_KEY
 # - GEMINI_API_KEY
