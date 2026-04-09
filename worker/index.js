@@ -834,60 +834,55 @@ async function handleSpellcheck(body, env, headers) {
 }
 
 // ═══════════════════════════════════════
-// /subtitle-format — 자막용 줄바꿈 + 구두점 포맷팅
+// /subtitle-format — 자막용 줄바꿈 포맷팅 (V2: Word-Index System)
 // ═══════════════════════════════════════
 
 const SUBTITLE_FORMAT_PROMPT = `<role>
-You are a Korean subtitle line-break formatter. Your job is to split Korean interview transcripts into subtitle lines that viewers can read at a glance. You must maintain consistent quality from the first line to the last, regardless of input length.
+You are a Korean subtitle line-break position expert. You receive Korean interview transcript text with numbered words (eojeols). Your ONLY job is to decide WHERE to place line breaks by returning the word numbers. You do NOT rewrite, modify, or reproduce any of the original text.
 </role>
 
-<hard_rules>
-These rules apply to EVERY line with NO exceptions:
-1. Every output line must be 15–25 characters (including spaces).
-2. Lines under 10 characters → FAILURE. Lines over 25 characters → FAILURE.
-3. Remove trailing periods (.) and commas (,). Preserve ? and !
-4. Remove metadata lines (filenames, dates, durations, speaker labels, dividers).
-5. Output valid JSON only: {"blocks":[{"index":0,"text":"formatted\\ntext"}]}
-6. After the JSON, output NOTHING else.
-</hard_rules>
+<task>
+Given numbered words like: [1]거기서 [2]광고 [3]매출 [4]잘 [5]나오고 [6]있으니까
+Return ONLY the word numbers AFTER which a line break should be placed.
+Output: {"breaks_after": [6]}
+This means: break after word 6 → line 1 = words 1–6, line 2 starts at word 7.
+</task>
 
-<process>
-Follow this exact sequence for every input:
+<decision_criteria>
+Your decisions must follow this priority order:
 
-STEP 1 — SEGMENT THE INPUT
-- Divide the full input into chunks of ~5–8 sentences.
-- Process each chunk independently with full attention to all rules.
-- Later chunks require the SAME care as the first. Do NOT rush.
+PRIORITY 1 — Never split semantic chunks (see <never_split>)
+PRIORITY 2 — Break at clause boundaries (see <clause_boundaries>)
+PRIORITY 3 — Aim for roughly 15–25 characters per line, but NEVER sacrifice Priority 1 or 2 for character count. A 10-character line or a 28-character line is acceptable if splitting would break a semantic unit.
+</decision_criteria>
 
-STEP 2 — FOR EACH CHUNK:
+<clause_boundaries>
+These are natural break points in Korean speech.
 
-  2a. Mark clause boundaries
-  Clause-ending suffixes (break AFTER these):
-  ~하고, ~해서, ~인데, ~지만, ~니까, ~있고, ~거든요, ~잖아요, ~됐고, ~보니까, ~계세요
+Break AFTER words ending with these suffixes:
+~하고, ~해서, ~인데, ~지만, ~니까, ~있고, ~거든요, ~잖아요, ~됐고, ~보니까, ~계세요, ~는데, ~때문에
 
-  Conjunctions (break BEFORE these — they start a new line):
-  그래서, 그리고, 하지만, 결국, 심지어, 특히, 마찬가지로
+Break BEFORE these conjunctions (they start a new line):
+그래서, 그리고, 하지만, 결국, 심지어, 특히, 마찬가지로, 근데, 그러니까, 그런데
 
-  2b. Identify semantic chunks within each clause
-  A semantic chunk is a group of words forming ONE idea:
-  - [Subject/Topic + Particle]: 사용자의 역량이
-  - [Modifier clause + Head noun]: 돌아가고 있는 곳들이
-  - [Adverb(ial phrase) + Predicate]: 많이 쓸수록
-  - [Object + Predicate]: 토큰을 생산할
-  - [Main verb + Auxiliary verb + Ending]: 나오고 있으니까
+Break BEFORE direct speech (quoted utterances start a new line).
+</clause_boundaries>
 
-  2c. Place line breaks BETWEEN semantic chunks, never inside them.
-  Choose the break point closest to the 15–25 character target.
+<semantic_chunks>
+A semantic chunk is a group of words forming ONE meaning unit. Never place a break inside a chunk.
 
-  2d. VALIDATE every line in this chunk.
-  Count characters. If any line is < 15 or > 25, fix it NOW before proceeding.
-
-STEP 3 — FINAL VALIDATION
-After all chunks are processed, do a final character-count check on the entire output.
-</process>
+| Chunk Type                    | Example (keep together)       |
+|-------------------------------|-------------------------------|
+| Subject/Topic + Particle      | 사용자의 역량이                |
+| Modifier clause + Head noun   | 돌아가고 있는 곳들이            |
+| Adverb(ial phrase) + Predicate| 많이 쓸수록                    |
+| Object + Predicate            | 토큰을 생산할                  |
+| Main verb + Aux verb + Ending | 나오고 있으니까                |
+| Noun + Particle               | 사용자의 (사용자 / 의 = ERROR) |
+</semantic_chunks>
 
 <never_split>
-The following patterns must ALWAYS stay on a single line. Breaking inside them is a critical error.
+Breaking inside ANY of these patterns is a critical error.
 
 | Pattern Type                  | Keep Together            | WRONG Split              |
 |-------------------------------|--------------------------|--------------------------|
@@ -902,84 +897,69 @@ The following patterns must ALWAYS stay on a single line. Breaking inside them i
 <examples>
 
 <example id="1">
-<description>Mixed sentence types: statement, direct speech with ?, and short clauses. Shows conjunction-start rule, quote handling, and semantic unit preservation.</description>
-
-<input>마찬가지로 워크 에이전트도 사용자의 역량이 중요합니다 회사 데이터를 다 주고 예를 들면 인사 규정 다 주고 제가 한 줄로 물어봐요 나 내일 집에 가도 돼? 이러면 답을 할 수가 없죠 이게 도대체 무슨 뜻인데요</input>
-
-<correct_output>
-마찬가지로 워크 에이전트도
-사용자의 역량이 중요합니다
-회사 데이터를 다 주고 예를 들면
-인사 규정 다 주고 제가 한 줄로 물어봐요
-나 내일 집에 가도 돼?
-이러면 답을 할 수가 없죠
-이게 도대체 무슨 뜻인데요
-</correct_output>
-
-<line_by_line_analysis>
-Line 1: "마찬가지로 워크 에이전트도" (15ch) — Conjunction starts the line; break before new subject+particle
-Line 2: "사용자의 역량이 중요합니다" (15ch) — [Subject+Particle] + [Predicate] = one complete clause
-Line 3: "회사 데이터를 다 주고 예를 들면" (18ch) — Clause ending ~주고 + transitional phrase
-Line 4: "인사 규정 다 주고 제가 한 줄로 물어봐요" (22ch) — Clause ending ~주고 + new subject flows naturally
-Line 5: "나 내일 집에 가도 돼?" (15ch) — Direct speech with ? preserved; new line for direct speech
-Line 6: "이러면 답을 할 수가 없죠" (15ch) — [Object+Predicate] kept intact
-Line 7: "이게 도대체 무슨 뜻인데요" (15ch) — [Adverb+Predicate] kept intact
-</line_by_line_analysis>
+<input>
+[1]마찬가지로 [2]워크 [3]에이전트도 [4]사용자의 [5]역량이 [6]중요합니다 [7]회사 [8]데이터를 [9]다 [10]주고 [11]예를 [12]들면 [13]인사 [14]규정 [15]다 [16]주고 [17]제가 [18]한 [19]줄로 [20]물어봐요 [21]나 [22]내일 [23]집에 [24]가도 [25]돼? [26]이러면 [27]답을 [28]할 [29]수가 [30]없죠 [31]이게 [32]도대체 [33]무슨 [34]뜻인데요
+</input>
+<correct_output>{"breaks_after": [3, 6, 12, 20, 25, 30]}</correct_output>
 </example>
 
 <example id="2">
-<description>Long compound sentence with listed proper nouns and nested modifier clause. Demonstrates never_split rules for [Main verb + Auxiliary verb] and [Object + Predicate].</description>
+<input>
+[1]거기서 [2]광고 [3]매출 [4]잘 [5]나오고 [6]있으니까 [7]그런 [8]거에 [9]장점은 [10]있지만 [11]결국 [12]아마존 [13]마이크로소프트 [14]구글 [15]애플은 [16]토큰을 [17]많이 [18]쓸수록 [19]회사가 [20]좋아지는 [21]회사가 [22]되려고 [23]하고 [24]있고
+</input>
+<correct_output>{"breaks_after": [6, 10, 13, 18, 21]}</correct_output>
+</example>
 
-<input>거기서 광고 매출 잘 나오고 있으니까 그런 거에 장점은 있지만 결국 아마존 마이크로소프트 구글 애플은 결국 토큰을 많이 쓸수록 회사가 좋아지는 회사가 되려고 하고 있고</input>
-
-<correct_output>
-거기서 광고 매출 잘 나오고 있으니까
-그런 거에 장점은 있지만
-결국 아마존 마이크로소프트
-구글 애플은 토큰을 많이 쓸수록
-회사가 좋아지는 회사가
-되려고 하고 있고
-</correct_output>
-
-<line_by_line_analysis>
-Line 1: "거기서 광고 매출 잘 나오고 있으니까" (20ch) — [Main verb + Auxiliary verb] kept intact; clause ending ~니까
-Line 2: "그런 거에 장점은 있지만" (14ch) — Clause ending ~지만; break before conjunction
-Line 3: "결국 아마존 마이크로소프트" (15ch) — Conjunction starts new line; proper noun list split at natural boundary
-Line 4: "구글 애플은 토큰을 많이 쓸수록" (17ch) — [Object + Predicate] kept intact
-Line 5: "회사가 좋아지는 회사가" (13ch) — [Modifier clause + Head noun] kept intact
-Line 6: "되려고 하고 있고" (10ch) — [Main verb + Auxiliary verb + Ending] kept intact
-</line_by_line_analysis>
-
-<wrong_output reason="Splits [Main verb + Auxiliary verb]">
-거기서 광고 매출 잘 나오고
-있으니까 그런 거에 장점은 있지만
-</wrong_output>
-
-<wrong_output reason="Splits [Object + Predicate]">
-구글 애플은 토큰을 많이
-쓸수록 회사가 좋아지는 회사가
-</wrong_output>
-
-<wrong_output reason="Splits [Modifier clause + Head noun]">
-회사가 좋아지는
-회사가 되려고 하고 있고
-</wrong_output>
+<example id="3">
+<input>
+[1]1년 [2]만에 [3]30년 [4]개발자 [5]기업 [6]분석 [7]시리즈를 [8]저희가 [9]다시 [10]시작해서 [11]지금 [12]이어가고 [13]있는데 [14]일단 [15]토큰을 [16]중심으로 [17]하는 [18]토큰 [19]이코노미가 [20]굉장히 [21]중요하다고 [22]말씀해 [23]주셨고 [24]코딩 [25]에이전트는 [26]이미 [27]다 [28]보급돼서 [29]우리가 [30]잘 [31]쓰고 [32]있고
+</input>
+<correct_output>{"breaks_after": [7, 13, 19, 23, 28]}</correct_output>
 </example>
 
 </examples>
 
-<quote_rules>
-- When quoted speech ('...' or "...") spans multiple lines, repeat the quote marks on each line.
-- Direct speech always starts a new line.
-</quote_rules>
+<output_format>
+Return ONLY valid JSON. Nothing before or after.
+{"breaks_after": [3, 6, 12, 20, 25, 30]}
 
-<quality_reminder>
-Read this before processing EACH new segment:
-- Line 300 must be the same quality as line 1.
-- Every line: 15–25 characters. Count them.
-- Never split semantic chunks. Break only BETWEEN meaning units.
-- If you feel yourself rushing, SLOW DOWN and re-validate.
-</quality_reminder>`;
+The numbers are word indices AFTER which a line break is inserted.
+Do NOT include the last word's index (no trailing break).
+Do NOT output any text, explanation, or markdown — JSON only.
+</output_format>`;
+
+// ── 어절 번호 부여 ──
+function numberWords(text) {
+  const words = text.split(/\s+/).filter(w => w.length > 0);
+  const numbered = words.map((w, i) => `[${i + 1}]${w}`).join(' ');
+  return { words, numbered, count: words.length };
+}
+
+// ── breaks_after → 줄바꿈 텍스트 재조립 ──
+function applyBreaks(words, breaksAfter) {
+  const breakSet = new Set(breaksAfter);
+  const lines = [];
+  let currentLine = [];
+  for (let i = 0; i < words.length; i++) {
+    currentLine.push(words[i]);
+    if (breakSet.has(i + 1) || i === words.length - 1) {
+      lines.push(currentLine.join(' '));
+      currentLine = [];
+    }
+  }
+  return lines;
+}
+
+// ── 후처리: 줄 끝 마침표/쉼표 제거 ──
+function postProcessLines(lines) {
+  return lines.map(l => {
+    let s = l.trimEnd();
+    while (s.endsWith('.') || s.endsWith(',')) {
+      s = s.slice(0, -1).trimEnd();
+    }
+    return s;
+  }).filter(l => l.length > 0);
+}
 
 async function handleSubtitleFormat(body, env, headers) {
   const { blocks } = body;
@@ -988,9 +968,11 @@ async function handleSubtitleFormat(body, env, headers) {
   }
 
   const fullText = blocks.map(b => b.text).join('\n');
-  const userMsg = `아래 텍스트를 자막용으로 포맷팅하세요. 줄바꿈과 구두점만 변경하고, 내용은 절대 수정하지 마세요.\n\n---\n${fullText}\n---`;
 
-  // ── OpenAI API 직접 호출 (callOpenAI 미사용) ──
+  // ── 전처리: 어절 번호 부여 ──
+  const { words, numbered, count: wordCount } = numberWords(fullText);
+
+  // ── OpenAI API 직접 호출 ──
   let response;
   try {
     response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -1003,23 +985,24 @@ async function handleSubtitleFormat(body, env, headers) {
         model: "gpt-5.4-mini",
         messages: [
           { role: "system", content: SUBTITLE_FORMAT_PROMPT },
-          { role: "user", content: userMsg },
+          { role: "user", content: numbered },
         ],
         temperature: 0.1,
-        max_completion_tokens: 8000,
+        max_completion_tokens: 2000,
+        response_format: { type: "json_object" },
       }),
     });
   } catch (netErr) {
     return new Response(JSON.stringify({
       error: `Network error: ${netErr.message}`,
-      _debug: { inputLength: fullText.length, error: netErr.message },
+      _debug: { inputLength: fullText.length, wordCount, error: netErr.message },
     }), { status: 502, headers });
   }
 
   if (response.status === 429) {
     return new Response(JSON.stringify({
       error: "Rate limited. Please wait and retry.",
-      _debug: { inputLength: fullText.length, error: "429 rate limited" },
+      _debug: { inputLength: fullText.length, wordCount, error: "429 rate limited" },
     }), { status: 429, headers });
   }
 
@@ -1027,7 +1010,7 @@ async function handleSubtitleFormat(body, env, headers) {
     const errText = await response.text();
     return new Response(JSON.stringify({
       error: `OpenAI API error ${response.status}: ${errText}`,
-      _debug: { inputLength: fullText.length, error: errText.substring(0, 500) },
+      _debug: { inputLength: fullText.length, wordCount, error: errText.substring(0, 500) },
     }), { status: response.status, headers });
   }
 
@@ -1037,80 +1020,76 @@ async function handleSubtitleFormat(body, env, headers) {
 
   if (finishReason === "length") {
     return new Response(JSON.stringify({
-      error: `출력 토큰 한계 초과 (finish_reason: length). 입력을 더 작게 분할해주세요.`,
-      _debug: { inputLength: fullText.length, finishReason, rawLength: rawContent.length, rawPreview: rawContent.substring(0, 300) },
+      error: "출력 토큰 한계 초과 (finish_reason: length).",
+      _debug: { inputLength: fullText.length, wordCount, finishReason, rawPreview: rawContent.substring(0, 300) },
     }), { status: 413, headers });
   }
 
   if (!rawContent) {
     return new Response(JSON.stringify({
-      error: `Empty response from OpenAI. finish_reason: ${finishReason}. Model: ${data.model}`,
-      _debug: { inputLength: fullText.length, finishReason, rawLength: 0 },
+      error: `Empty response from OpenAI. finish_reason: ${finishReason}`,
+      _debug: { inputLength: fullText.length, wordCount, finishReason },
     }), { status: 500, headers });
   }
 
-  // ── 3단계 fallback 파싱 ──
-  let finalText = null;
+  // ── 파싱: breaks_after 추출 ──
+  let breaksAfter = null;
   let parseMethod = null;
 
-  // 1단계: JSON 파싱 — { } 사이 추출 → blocks[0].text
+  // 1단계: JSON 파싱
   try {
     const braceStart = rawContent.indexOf('{');
     const braceEnd = rawContent.lastIndexOf('}');
     if (braceStart !== -1 && braceEnd > braceStart) {
-      const jsonStr = rawContent.substring(braceStart, braceEnd + 1);
-      const parsed = JSON.parse(jsonStr);
-      if (parsed.blocks && parsed.blocks.length > 0 && parsed.blocks[0].text) {
-        finalText = parsed.blocks[0].text;
-        parseMethod = "json";
-      } else if (parsed.text) {
-        finalText = parsed.text;
+      const parsed = JSON.parse(rawContent.substring(braceStart, braceEnd + 1));
+      if (Array.isArray(parsed.breaks_after)) {
+        breaksAfter = parsed.breaks_after.filter(n => typeof n === 'number' && n >= 1 && n < wordCount);
         parseMethod = "json";
       }
     }
-  } catch (e) { /* JSON 파싱 실패 → 2단계로 */ }
+  } catch (e) { /* fallback */ }
 
-  // 2단계: 정규식으로 "text" 값 추출
-  if (!finalText) {
+  // 2단계: 정규식으로 배열 추출
+  if (!breaksAfter) {
     try {
-      const textMatch = rawContent.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/s);
-      if (textMatch) {
-        finalText = JSON.parse('"' + textMatch[1] + '"'); // unescape
+      const arrMatch = rawContent.match(/\[[\d,\s]+\]/);
+      if (arrMatch) {
+        breaksAfter = JSON.parse(arrMatch[0]).filter(n => typeof n === 'number' && n >= 1 && n < wordCount);
         parseMethod = "regex";
       }
-    } catch (e) { /* 정규식 실패 → 3단계로 */ }
+    } catch (e) { /* fallback */ }
   }
 
-  // 3단계: raw 텍스트 사용 — 비콘텐츠 제거
-  if (!finalText) {
-    let cleaned = rawContent.trim();
-    // 코드펜스 제거
-    cleaned = cleaned.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '');
-    // 설명 문구 제거 (줄 단위)
-    cleaned = cleaned.split('\n').filter(line => {
-      const t = line.trim();
-      if (!t) return true;
-      if (/^(다음은|아래는|위 텍스트를|포맷팅 결과|Here is|Below is|The formatted)/i.test(t)) return false;
-      if (/^\{|\}$/.test(t)) return false;
-      if (/^"blocks"\s*:/.test(t) || /^"text"\s*:/.test(t) || /^"index"\s*:/.test(t)) return false;
-      return true;
-    }).join('\n').trim();
-    if (cleaned.length > 0) {
-      finalText = cleaned;
-      parseMethod = "rawText";
-    } else {
-      finalText = fullText; // 최종 fallback: 원본
-      parseMethod = "fallback";
+  // 3단계: 파싱 실패 — 단순 글자수 기반 자동 분할
+  if (!breaksAfter || breaksAfter.length === 0) {
+    parseMethod = "fallback";
+    breaksAfter = [];
+    let charCount = 0;
+    for (let i = 0; i < words.length - 1; i++) {
+      charCount += words[i].length + 1;
+      if (charCount >= 20) {
+        breaksAfter.push(i + 1);
+        charCount = 0;
+      }
     }
   }
 
+  // ── 후처리: breaks_after → 줄바꿈 텍스트 ──
+  const lines = applyBreaks(words, breaksAfter);
+  const processed = postProcessLines(lines);
+  const finalText = processed.join('\n');
+
   const _debug = {
+    version: "v2-wordindex",
     rawLength: rawContent.length,
     parseMethod,
     finishReason,
     inputLength: fullText.length,
+    wordCount,
+    breaksCount: breaksAfter.length,
     outputLength: finalText.length,
     rawPreview: rawContent.substring(0, 800),
+    breaksAfter,
   };
 
   return new Response(JSON.stringify({
@@ -1120,6 +1099,7 @@ async function handleSubtitleFormat(body, env, headers) {
     _debug,
   }), { headers });
 }
+
 
 // ═══════════════════════════════════════
 // /term-explain — 용어 설명 자동 생성
