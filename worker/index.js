@@ -853,13 +853,20 @@ Your decisions must follow this priority order:
 
 PRIORITY 1 — Never split semantic chunks (see <never_split>)
 PRIORITY 2 — Break at clause boundaries (see <clause_boundaries>)
-PRIORITY 3 — Every line MUST be between 12 and 28 characters. This is NOT optional.
+PRIORITY 3 — Every line SHOULD be between 12 and 28 characters.
+HARD LIMIT: No line may exceed 35 characters under any circumstance.
+If keeping a semantic chunk intact would produce a line over 35 characters, you MUST find a break point inside that chunk — even semantic chunks can be split when they exceed 35 characters.
+
+MINIMUM BREAK DENSITY: For every 5 words in the input, there must be at least 1 break.
+A 50-word input must have at least 10 breaks.
+A 60-word input must have at least 12 breaks.
+If your output has fewer breaks than this minimum, you are making lines too long.
 
 When PRIORITY 2 and 3 conflict:
 - If a clause boundary produces a line over 28 characters → you MUST find an additional break point inside that clause. Look for internal phrase boundaries (object+verb, adverb+predicate, list items).
 - If a clause boundary produces a line under 12 characters → acceptable ONLY if the line is a semantically complete unit (direct speech, exclamation, or a standalone clause ending). Otherwise merge with adjacent line.
 
-CRITICAL RULE: A line over 30 characters is ALWAYS wrong, no matter what. When you see 5+ words accumulating without a break, you are probably making a line too long. Break it.
+CRITICAL RULE: A line over 35 characters is ALWAYS wrong, no matter what. When you see 5+ words accumulating without a break, you are probably making a line too long. Break it.
 </decision_criteria>
 
 <line_length_guide>
@@ -959,6 +966,11 @@ Return ONLY valid JSON. Nothing before or after.
 The numbers are word indices AFTER which a line break is inserted.
 Do NOT include the last word's index (no trailing break).
 Do NOT output any text, explanation, or markdown — JSON only.
+
+Before outputting the JSON, silently verify:
+1. Count your breaks. For N input words, you need at least N/5 breaks.
+2. Check: is there any gap of 8+ word indices between consecutive breaks? If yes, add a break in that gap.
+3. Only then output the final JSON.
 </output_format>`;
 
 // ═══════════════════════════════════════
@@ -1019,11 +1031,17 @@ const AUX_VERBS = /^(있(고|는데|으니까|잖아요|어요|습니다|었고|
 
 async function postProcessSubtitleV2(words, breaksAfter, env) {
   let lines = buildLinesV2(words, breaksAfter);
-  lines = await validateAndResplit(lines, env);
+  const resplitResult = await validateAndResplit(lines, env);
+  lines = resplitResult.lines;
   lines = mergeShortLines(lines);
   lines = removeTrailingPunctuation(lines);
   lines = fixQuotesV2(lines);
-  return lines.map(l => l.text).join('\n');
+  return {
+    text: lines.map(l => l.text).join('\n'),
+    resplitCount: resplitResult.resplitCount,
+    resplitLines: resplitResult.resplitLines,
+    finalLineCount: lines.length,
+  };
 }
 
 function buildLinesV2(words, breaksAfter) {
@@ -1041,60 +1059,80 @@ function buildLinesV2(words, breaksAfter) {
   return lines;
 }
 
-// 변경 5: 글자 수 위반 줄만 모델에게 재질의 (코드 기반 자동 분할 제거)
+// 변경 D: 35ch 기준 + 최대 2회 재질의 + 강제 분할 fallback
+const V2_HARD_LIMIT = 35;
+
 async function validateAndResplit(lines, env) {
-  const violations = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].text.length > V2_MAX_CHARS) {
-      violations.push(i);
+  const MAX_RETRIES = 2;
+  let resplitCount = 0;
+  const resplitLines = [];
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const violations = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].text.length > V2_HARD_LIMIT) {
+        violations.push(i);
+      }
+    }
+
+    if (violations.length === 0) break;
+
+    // 뒤에서부터 처리 (splice 인덱스 안 밀리게)
+    for (let vi = violations.length - 1; vi >= 0; vi--) {
+      const idx = violations[vi];
+      const start = Math.max(0, idx - 1);
+      const end = Math.min(lines.length - 1, idx + 1);
+      const contextLines = lines.slice(start, end + 1);
+      const contextWords = contextLines.flatMap(l => l.words);
+      const numbered = contextWords.map((w, i) => `[${i + 1}]${w}`).join(' ');
+
+      resplitCount++;
+      resplitLines.push(idx);
+
+      try {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.OPENAI_API_KEY}` },
+          body: JSON.stringify({
+            model: "gpt-5.4-mini",
+            messages: [
+              { role: "system", content: SUBTITLE_FORMAT_PROMPT },
+              { role: "user", content: numbered },
+            ],
+            temperature: 0.1,
+            max_completion_tokens: 500,
+            response_format: { type: "json_object" },
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const rawContent = data.choices?.[0]?.message?.content || "";
+          try {
+            const parsed = JSON.parse(rawContent.substring(rawContent.indexOf('{'), rawContent.lastIndexOf('}') + 1));
+            if (Array.isArray(parsed.breaks_after)) {
+              const newBreaks = parsed.breaks_after.filter(n => typeof n === 'number' && n >= 1 && n < contextWords.length);
+              const newLines = buildLinesV2(contextWords, newBreaks);
+              lines.splice(start, end - start + 1, ...newLines);
+            }
+          } catch (e) { /* 파싱 실패 시 원본 유지 */ }
+        }
+      } catch (e) { /* 네트워크 에러 시 원본 유지 */ }
     }
   }
 
-  if (violations.length === 0) return lines;
-
-  // 위반 줄 ± 앞뒤 1줄을 추출해서 모델에 재질의
-  const processed = [...lines];
-  // 뒤에서부터 처리 (splice 인덱스 안 밀리게)
-  for (let vi = violations.length - 1; vi >= 0; vi--) {
-    const idx = violations[vi];
-    const start = Math.max(0, idx - 1);
-    const end = Math.min(processed.length - 1, idx + 1);
-    const contextLines = processed.slice(start, end + 1);
-    const contextWords = contextLines.flatMap(l => l.words);
-    const numbered = contextWords.map((w, i) => `[${i + 1}]${w}`).join(' ');
-
-    try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.OPENAI_API_KEY}` },
-        body: JSON.stringify({
-          model: "gpt-5.4-mini",
-          messages: [
-            { role: "system", content: SUBTITLE_FORMAT_PROMPT },
-            { role: "user", content: numbered },
-          ],
-          temperature: 0.1,
-          max_completion_tokens: 500,
-          response_format: { type: "json_object" },
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const rawContent = data.choices?.[0]?.message?.content || "";
-        try {
-          const parsed = JSON.parse(rawContent.substring(rawContent.indexOf('{'), rawContent.lastIndexOf('}') + 1));
-          if (Array.isArray(parsed.breaks_after)) {
-            const newBreaks = parsed.breaks_after.filter(n => typeof n === 'number' && n >= 1 && n < contextWords.length);
-            const newLines = buildLinesV2(contextWords, newBreaks);
-            processed.splice(start, end - start + 1, ...newLines);
-          }
-        } catch (e) { /* 파싱 실패 시 원본 유지 */ }
-      }
-    } catch (e) { /* 네트워크 에러 시 원본 유지 */ }
+  // 최후 수단: 재질의 2회 후에도 35ch 초과 줄이 남으면 중간 지점에서 강제 분할
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].text.length > V2_HARD_LIMIT) {
+      const ws = lines[i].words;
+      const mid = Math.floor(ws.length / 2);
+      const line1 = { text: ws.slice(0, mid).join(' '), words: ws.slice(0, mid) };
+      const line2 = { text: ws.slice(mid).join(' '), words: ws.slice(mid) };
+      lines.splice(i, 1, line1, line2);
+    }
   }
 
-  return processed;
+  return { lines, resplitCount, resplitLines };
 }
 
 // 변경 6: 양방향 병합 강화 — 앞줄 우선 + 1어절/MIN_CHARS 통합 조건
@@ -1254,18 +1292,21 @@ async function handleSubtitleFormat(body, env, headers) {
     }
 
     // ── 후처리 ──
-    const finalText = await postProcessSubtitleV2(words, breaksAfter, env);
+    const ppResult = await postProcessSubtitleV2(words, breaksAfter, env);
 
     return new Response(JSON.stringify({
       success: true,
-      formatted: finalText,
+      formatted: ppResult.text,
       _debug: {
-        version: "v2.2",
+        version: "v2.2-p005",
         wordCount,
         breaksCount: breaksAfter.length,
-        outputLength: finalText.length,
-        finishReason,
         breaksAfter,
+        resplitCount: ppResult.resplitCount,
+        resplitLines: ppResult.resplitLines,
+        finalLineCount: ppResult.finalLineCount,
+        outputLength: ppResult.text.length,
+        finishReason,
         rawPreview: rawContent.substring(0, 300),
       },
     }), { headers });
@@ -1307,8 +1348,8 @@ async function handleSubtitleFormat(body, env, headers) {
     let cc = 0;
     for (let i = 0; i < words.length - 1; i++) { cc += words[i].length + 1; if (cc >= 20) { allBreaksAfter.push(i + 1); cc = 0; } }
   }
-  const finalText = await postProcessSubtitleV2(words, allBreaksAfter, env);
-  return new Response(JSON.stringify({ success: true, formatted: finalText, blocks: [{ index: 0, text: finalText }] }), { headers });
+  const ppResult = await postProcessSubtitleV2(words, allBreaksAfter, env);
+  return new Response(JSON.stringify({ success: true, formatted: ppResult.text, blocks: [{ index: 0, text: ppResult.text }] }), { headers });
 }
 
 // ═══════════════════════════════════════

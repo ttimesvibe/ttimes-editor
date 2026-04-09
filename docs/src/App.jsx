@@ -2978,7 +2978,7 @@ export default function App() {
             const words = fullText.split(/\s+/).filter(w => w.length > 0);
 
             // 어절 기반 청크 분할 (50~100어절, 문장/절 경계에서 끊기)
-            const TARGET_WORDS = 60;
+            const TARGET_WORDS = 50;
             const SENTENCE_END = /[.?!]$/;
             const CLAUSE_END = /(니다|어요|거든요|잖아요|는데요|네요|세요|죠|고요|는데|지만|니까|해서|있고)$/;
 
