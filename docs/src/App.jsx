@@ -804,15 +804,15 @@ let MARKER_COLORS = _savedTheme === "light" ? MARKER_COLORS_LIGHT : MARKER_COLOR
 function Badge({ name }) {
   const h = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
   const isLight = C.bg[1] > "E";
-  return <span style={{ fontSize:11,fontWeight:700,padding:"2px 7px",borderRadius:4,
+  return <span style={{ fontSize:12,fontWeight:700,padding:"2px 7px",borderRadius:4,
     background:`hsla(${h},55%,50%,${isLight?0.12:0.15})`,color:`hsl(${h},${isLight?"50%,38%":"55%,65%"})`,marginRight:5 }}>{name}</span>;
 }
 
 function Progress({ pct, label }) {
   return <div style={{margin:"16px 0"}}>
     <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-      <span style={{fontSize:13,color:C.txM}}>{label}</span>
-      <span style={{fontSize:13,color:C.ac,fontWeight:600}}>{pct}%</span>
+      <span style={{fontSize:14,color:C.txM}}>{label}</span>
+      <span style={{fontSize:14,color:C.ac,fontWeight:600}}>{pct}%</span>
     </div>
     <div style={{height:4,background:C.bd,borderRadius:2,overflow:"hidden"}}>
       <div style={{height:"100%",background:`linear-gradient(90deg,${C.ac},#7C3AED)`,
@@ -909,7 +909,7 @@ function MarkedText({ text, blockIdx, hlMarkers, matchingMode, onMarkerAdd }) {
 
   return <div ref={textRef}
     onMouseUp={handleMouseUp}
-    style={{fontSize:14,lineHeight:1.8,color:C.tx,wordBreak:"keep-all",whiteSpace:"pre-wrap",
+    style={{fontSize:15,lineHeight:1.8,color:C.tx,wordBreak:"keep-all",whiteSpace:"pre-wrap",
       cursor:isMatching?"crosshair":"inherit",
       transition:"all 0.15s"}}>
     {segs.map((s, i) => s.color
@@ -940,11 +940,11 @@ function TypeBadge({ type, onChangeType }) {
   const effectiveCat = (cat === "C" && !type.startsWith("C_user")) ? "A" : cat;
   const c = labelMap[effectiveCat] || { label: "자막", bg: "rgba(255,255,255,0.08)", tx: C.txM };
   if (!onChangeType) {
-    return <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,
+    return <span style={{fontSize:11,fontWeight:700,padding:"2px 6px",borderRadius:4,
       background:c.bg,color:c.tx,letterSpacing:"0.03em"}}>{c.label}</span>;
   }
   return <span style={{position:"relative",display:"inline-block"}}>
-    <span onClick={e=>{e.stopPropagation();setOpen(!open)}} style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,
+    <span onClick={e=>{e.stopPropagation();setOpen(!open)}} style={{fontSize:11,fontWeight:700,padding:"2px 6px",borderRadius:4,
       background:c.bg,color:c.tx,letterSpacing:"0.03em",cursor:"pointer",
       border:`1px solid ${c.tx}44`,userSelect:"none"}}>{c.label} ▾</span>
     {open && <div style={{position:"absolute",top:"100%",left:0,marginTop:4,zIndex:999,
@@ -954,7 +954,7 @@ function TypeBadge({ type, onChangeType }) {
         const displayCat = k === "C_user" ? "C" : k;
         const m = labelMap[displayCat] || labelMap["A"];
         return <div key={k} onClick={e=>{e.stopPropagation();onChangeType(k);setOpen(false)}}
-          style={{padding:"6px 12px",fontSize:11,fontWeight:600,color:m.tx,cursor:"pointer",
+          style={{padding:"6px 12px",fontSize:12,fontWeight:600,color:m.tx,cursor:"pointer",
             background:effectiveCat===displayCat?m.bg:"transparent",whiteSpace:"nowrap"}}
           onMouseEnter={e=>e.currentTarget.style.background=m.bg}
           onMouseLeave={e=>{if(effectiveCat!==displayCat)e.currentTarget.style.background="transparent"}}>{l}</div>;
@@ -971,26 +971,26 @@ function BlockView({ block, pos, side, active, onClick, bRef, showIndex }) {
       boxShadow:active?"inset 0 0 0 1px rgba(168,85,247,0.3), 0 0 20px rgba(168,85,247,0.1)":"none",
       borderRadius:active?"0 8px 8px 0":"0"}}>
     <div style={{marginBottom:4,display:"flex",alignItems:"center"}}>
-      {showIndex && <span style={{fontSize:10,fontWeight:700,color:C.txD,fontFamily:"monospace",
+      {showIndex && <span style={{fontSize:11,fontWeight:700,color:C.txD,fontFamily:"monospace",
         background:"rgba(255,255,255,0.06)",padding:"1px 5px",borderRadius:3,marginRight:6}}>#{block.index}</span>}
       <Badge name={block.speaker}/>
-      <span style={{fontSize:11,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
+      <span style={{fontSize:12,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
     </div>
-    <div style={{fontSize:14,lineHeight:1.8,color:C.tx,wordBreak:"keep-all"}}>
+    <div style={{fontSize:15,lineHeight:1.8,color:C.tx,wordBreak:"keep-all"}}>
       {segs.map((s,i) => {
         // 좌측: 필러 구간 — 노란 배경 + 취소선
         if (s.tp === "filler_removal") return <span key={i} style={{textDecoration:"line-through",
-          textDecorationColor:C.fSk,background:C.fBg,color:C.fTx,padding:"1px 2px",borderRadius:3,fontSize:13}}>{s.text}</span>;
+          textDecorationColor:C.fSk,background:C.fBg,color:C.fTx,padding:"1px 2px",borderRadius:3,fontSize:14}}>{s.text}</span>;
         // 우측: 필러 제거된 교정 텍스트 (일반 텍스트와 동일)
         if (s.tp === "filler_applied") return <span key={i}>{s.text}</span>;
         // 좌측: 용어 오류 표시
         if (s.tp === "term_correction") return <span key={i} style={{background:C.tBg,color:C.tTx,
-          padding:"1px 3px",borderRadius:3,textDecoration:"underline wavy",textDecorationColor:C.tTx,fontSize:13}}>{s.text}</span>;
+          padding:"1px 3px",borderRadius:3,textDecoration:"underline wavy",textDecorationColor:C.tTx,fontSize:14}}>{s.text}</span>;
         // 우측: 용어 교정 적용 — 컬러 없이 일반 텍스트
         if (s.tp === "term_correction_applied") return <span key={i}>{s.text}</span>;
         // 좌측: 맞춤법 오류 표시
         if (s.tp === "spelling") return <span key={i} style={{background:C.sBg,color:C.sTx,
-          padding:"1px 3px",borderRadius:3,textDecoration:"underline dotted",textDecorationColor:C.sTx,fontSize:13}}
+          padding:"1px 3px",borderRadius:3,textDecoration:"underline dotted",textDecorationColor:C.sTx,fontSize:14}}
           title={s.subtype}>{s.text}</span>;
         // 우측: 맞춤법 교정 적용 — 컬러 없이 일반 텍스트
         if (s.tp === "spelling_applied") return <span key={i}>{s.text}</span>;
@@ -1040,16 +1040,16 @@ function ReviewBlock({ block, paragraphSegments, strikeRanges, isDeleted, onClic
       opacity:isDeleted?0.65:1,
       cursor:"pointer",transition:"all 0.15s",borderBottom:`1px solid ${C.bd}`}}>
     <div style={{marginBottom:4,display:"flex",alignItems:"center",gap:6}}>
-      <span style={{fontSize:10,fontWeight:700,color:C.txD,fontFamily:"monospace",
+      <span style={{fontSize:11,fontWeight:700,color:C.txD,fontFamily:"monospace",
         background:"rgba(255,255,255,0.06)",padding:"1px 5px",borderRadius:3}}>#{idx}</span>
       <Badge name={block.speaker}/>
-      <span style={{fontSize:11,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
-      {isDeleted && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,
+      <span style={{fontSize:12,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
+      {isDeleted && <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,
         background:"rgba(239,68,68,0.15)",color:"#EF4444"}}>삭제</span>}
-      {hasPartialStrike && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,
+      {hasPartialStrike && <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,
         background:"rgba(245,158,11,0.15)",color:"#F59E0B"}}>부분 삭제</span>}
     </div>
-    <div style={{fontSize:14,lineHeight:1.8,color:isDeleted?C.txD:C.tx,wordBreak:"keep-all",
+    <div style={{fontSize:15,lineHeight:1.8,color:isDeleted?C.txD:C.tx,wordBreak:"keep-all",
       textDecoration:isDeleted?"line-through":"none",
       textDecorationColor:isDeleted?"#EF4444":"transparent",
       whiteSpace:"pre-wrap"}}>
@@ -1070,19 +1070,19 @@ function ScriptEditBlock({ block, correctedText, editedVal, isEdited, onSave, on
     background:isEdited?"rgba(34,197,94,0.04)":"transparent",
     transition:"all 0.15s"}}>
     <div style={{marginBottom:4,display:"flex",alignItems:"center",gap:6}}>
-      <span style={{fontSize:10,fontWeight:700,color:C.txD,fontFamily:"monospace",
+      <span style={{fontSize:11,fontWeight:700,color:C.txD,fontFamily:"monospace",
         background:"rgba(255,255,255,0.06)",padding:"1px 5px",borderRadius:3}}>#{idx}</span>
       <Badge name={block.speaker}/>
-      <span style={{fontSize:11,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
-      {isEdited && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,
+      <span style={{fontSize:12,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
+      {isEdited && <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,
         background:"rgba(34,197,94,0.15)",color:"#22C55E"}}>수정됨</span>}
       {isEdited && <button onClick={e=>{e.stopPropagation();onRevert()}}
-        style={{fontSize:10,color:C.txD,background:"none",border:"none",cursor:"pointer",marginLeft:"auto"}}
+        style={{fontSize:11,color:C.txD,background:"none",border:"none",cursor:"pointer",marginLeft:"auto"}}
         title="원래대로 되돌리기">↩ 되돌리기</button>}
     </div>
     {!editing ? (
       <div onClick={()=>{setDraft(displayText);setEditing(true)}}
-        style={{fontSize:14,lineHeight:1.8,color:C.tx,wordBreak:"keep-all",cursor:"text",
+        style={{fontSize:15,lineHeight:1.8,color:C.tx,wordBreak:"keep-all",cursor:"text",
           padding:"4px 0",minHeight:28,whiteSpace:"pre-wrap",
           borderRadius:6,transition:"background 0.15s"}}
         onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.03)"}
@@ -1094,7 +1094,7 @@ function ScriptEditBlock({ block, correctedText, editedVal, isEdited, onSave, on
         <textarea value={draft} onChange={e=>setDraft(e.target.value)}
           autoFocus rows={Math.max(3, draft.split("\n").length + 1)}
           style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1px solid ${C.ac}`,
-            background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:14,fontFamily:FN,
+            background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:15,fontFamily:FN,
             lineHeight:1.8,resize:"vertical",outline:"none",boxShadow:`0 0 0 2px ${C.ac}33`}}
           onKeyDown={e=>{
             if(e.key==="Escape"){setEditing(false);}
@@ -1106,16 +1106,16 @@ function ScriptEditBlock({ block, correctedText, editedVal, isEdited, onSave, on
             }
           }}/>
         <div style={{display:"flex",gap:4,marginTop:6,justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:11,color:C.txD}}>⌘/Ctrl+Enter 저장 · Esc 취소</span>
+          <span style={{fontSize:12,color:C.txD}}>⌘/Ctrl+Enter 저장 · Esc 취소</span>
           <div style={{display:"flex",gap:4}}>
             <button onClick={()=>setEditing(false)}
-              style={{fontSize:11,padding:"4px 12px",borderRadius:5,border:`1px solid ${C.bd}`,
+              style={{fontSize:12,padding:"4px 12px",borderRadius:5,border:`1px solid ${C.bd}`,
                 background:"transparent",color:C.txM,cursor:"pointer"}}>취소</button>
             <button onClick={()=>{
               const trimmed = draft.trim();
               onSave(trimmed !== correctedText ? trimmed : null);
               setEditing(false);
-            }} style={{fontSize:11,padding:"4px 12px",borderRadius:5,border:"none",
+            }} style={{fontSize:12,padding:"4px 12px",borderRadius:5,border:"none",
               background:C.ac,color:"#fff",fontWeight:600,cursor:"pointer"}}>저장</button>
           </div>
         </div>
@@ -1136,14 +1136,14 @@ function CorrectionRightBlock({ block, pos, active, onClick, bRef, correctedText
       background:"rgba(74,108,247,0.08)"}}>
       <div style={{marginBottom:4,display:"flex",alignItems:"center",gap:4}}>
         <Badge name={block.speaker}/>
-        <span style={{fontSize:11,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
-        <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,
+        <span style={{fontSize:12,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
+        <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,
           background:"rgba(74,108,247,0.15)",color:C.ac}}>편집 중</span>
       </div>
       <textarea value={draft} onChange={e=>setDraft(e.target.value)}
         autoFocus rows={Math.max(3, draft.split("\n").length + 1)}
         style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1px solid ${C.ac}`,
-          background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:14,fontFamily:FN,
+          background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:15,fontFamily:FN,
           lineHeight:1.8,resize:"vertical",outline:"none",boxShadow:`0 0 0 2px ${C.ac}33`}}
         onKeyDown={e=>{
           if(e.key==="Escape") setEditing(false);
@@ -1155,16 +1155,16 @@ function CorrectionRightBlock({ block, pos, active, onClick, bRef, correctedText
           }
         }}/>
       <div style={{display:"flex",gap:4,marginTop:6,justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:11,color:C.txD}}>⌘/Ctrl+Enter 저장 · Esc 취소</span>
+        <span style={{fontSize:12,color:C.txD}}>⌘/Ctrl+Enter 저장 · Esc 취소</span>
         <div style={{display:"flex",gap:4}}>
           <button onClick={()=>setEditing(false)}
-            style={{fontSize:11,padding:"4px 12px",borderRadius:5,border:`1px solid ${C.bd}`,
+            style={{fontSize:12,padding:"4px 12px",borderRadius:5,border:`1px solid ${C.bd}`,
               background:"transparent",color:C.txM,cursor:"pointer"}}>취소</button>
           <button onClick={()=>{
             const trimmed = draft.trim();
             onSave(trimmed !== correctedText ? trimmed : null);
             setEditing(false);
-          }} style={{fontSize:11,padding:"4px 12px",borderRadius:5,border:"none",
+          }} style={{fontSize:12,padding:"4px 12px",borderRadius:5,border:"none",
             background:C.ac,color:"#fff",fontWeight:600,cursor:"pointer"}}>저장</button>
         </div>
       </div>
@@ -1181,21 +1181,21 @@ function CorrectionRightBlock({ block, pos, active, onClick, bRef, correctedText
       borderRadius:active?"0 8px 8px 0":"0"}}>
     <div style={{marginBottom:4,display:"flex",alignItems:"center"}}>
       <Badge name={block.speaker}/>
-      <span style={{fontSize:11,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
-      {isEdited && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,marginLeft:6,
+      <span style={{fontSize:12,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
+      {isEdited && <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,marginLeft:6,
         background:"rgba(34,197,94,0.15)",color:"#22C55E"}}>수정됨</span>}
       <div style={{marginLeft:"auto",display:"flex",gap:3,opacity:0.5,transition:"opacity 0.15s"}}
         onMouseEnter={e=>e.currentTarget.style.opacity="1"}
         onMouseLeave={e=>e.currentTarget.style.opacity="0.5"}>
         {isEdited && <button onClick={e=>{e.stopPropagation();onRevert()}}
-          style={{fontSize:10,color:C.txD,background:"none",border:`1px solid ${C.bd}`,borderRadius:4,
+          style={{fontSize:11,color:C.txD,background:"none",border:`1px solid ${C.bd}`,borderRadius:4,
             cursor:"pointer",padding:"1px 6px"}} title="되돌리기">↩</button>}
         <button onClick={e=>{e.stopPropagation();setDraft(displayText !== null ? displayText : correctedText);setEditing(true)}}
-          style={{fontSize:10,color:C.txM,background:"none",border:`1px solid ${C.bd}`,borderRadius:4,
+          style={{fontSize:11,color:C.txM,background:"none",border:`1px solid ${C.bd}`,borderRadius:4,
             cursor:"pointer",padding:"1px 6px"}} title="이 블록 편집">✏️</button>
       </div>
     </div>
-    <div style={{fontSize:14,lineHeight:1.8,color:C.tx,wordBreak:"keep-all"}}>
+    <div style={{fontSize:15,lineHeight:1.8,color:C.tx,wordBreak:"keep-all"}}>
       {displayText !== null
         ? <span>{displayText}</span>
         : segs.map((s,i) => {
@@ -1289,14 +1289,14 @@ function GuideCard({ item, active, onClick, blocks, verdict, onVerdict, editedTe
     padding:"10px 12px",marginBottom:8,background:cardBg,cursor:"pointer",transition:"all 0.12s",
     boxShadow:active?`0 0 0 2px ${bc}44`:"none",opacity:cardOpacity}}>
     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-      <span style={{fontSize:13}}>{item._manual ? "✏️" : "💬"}</span>
+      <span style={{fontSize:14}}>{item._manual ? "✏️" : "💬"}</span>
       <Badge name={item.speaker||"—"}/>
-      <span style={{fontSize:11,color:active?bc:C.txD,fontFamily:"monospace",fontWeight:active?700:400}}>
+      <span style={{fontSize:12,color:active?bc:C.txD,fontFamily:"monospace",fontWeight:active?700:400}}>
         ⏱ {timeLabel}</span>
       <TypeBadge type={item.type} onChangeType={onChangeType}/>
-      {item._manual && <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,
+      {item._manual && <span style={{fontSize:10,fontWeight:700,padding:"1px 5px",borderRadius:3,
         background:"rgba(34,197,94,0.15)",color:"#22C55E"}}>수동</span>}
-      <span style={{fontSize:10,color:C.txD,fontFamily:"monospace",marginLeft:"auto"}}>#{item.block_index}</span>
+      <span style={{fontSize:11,color:C.txD,fontFamily:"monospace",marginLeft:"auto"}}>#{item.block_index}</span>
     </div>
 
     {/* 자막 텍스트 + 수정/복사 버튼 */}
@@ -1304,33 +1304,33 @@ function GuideCard({ item, active, onClick, blocks, verdict, onVerdict, editedTe
       <div>
         <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
           <div style={{flex:1}}>
-            {isB2 && <div style={{marginBottom:3}}><span style={{fontSize:11,fontWeight:700,color:"#3B82F6",background:"rgba(59,130,246,0.12)",
+            {isB2 && <div style={{marginBottom:3}}><span style={{fontSize:12,fontWeight:700,color:"#3B82F6",background:"rgba(59,130,246,0.12)",
               padding:"1px 6px",borderRadius:3}}>용어설명</span></div>}
-            <div style={{fontSize:14,fontWeight:500,lineHeight:1.5,whiteSpace:"pre-line",
+            <div style={{fontSize:15,fontWeight:500,lineHeight:1.5,whiteSpace:"pre-line",
               color:hasEdit?(currentVerdict==="discard"?C.txD:"#EF4444"):currentVerdict==="discard"?C.txD:C.tx,
               textDecoration:(hasEdit||currentVerdict==="discard")?"line-through":"none"}}>
               {item.subtitle}
             </div>
           </div>
           <button onClick={e=>{e.stopPropagation();const t=hasEdit?editedText:item.subtitle;navigator.clipboard.writeText(t);setCopied(true);setTimeout(()=>setCopied(false),1500)}}
-            style={{fontSize:10,fontWeight:600,padding:"2px 6px",borderRadius:4,
+            style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:4,
               border:`1px solid ${copied?"#22C55E":C.bd}`,background:copied?"rgba(34,197,94,0.15)":"rgba(255,255,255,0.04)",
               color:copied?"#22C55E":C.txM,cursor:"pointer",flexShrink:0,marginTop:2,transition:"all 0.15s",minWidth:28}}>
             {copied?"✓":"복사"}</button>
-          <button onClick={startEdit} style={{fontSize:10,fontWeight:600,padding:"2px 6px",borderRadius:4,
+          <button onClick={startEdit} style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:4,
             border:`1px solid ${C.bd}`,background:"rgba(255,255,255,0.04)",color:C.txM,cursor:"pointer",
             flexShrink:0,marginTop:2}}>수정</button>
         </div>
         {hasEdit && (
           <div style={{marginTop:4}}>
-            {isB2 && <div style={{marginBottom:3}}><span style={{fontSize:11,fontWeight:700,color:"#22C55E",background:"rgba(34,197,94,0.12)",
+            {isB2 && <div style={{marginBottom:3}}><span style={{fontSize:12,fontWeight:700,color:"#22C55E",background:"rgba(34,197,94,0.12)",
               padding:"1px 6px",borderRadius:3}}>용어설명</span></div>}
             <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
-              <div style={{flex:1,fontSize:14,fontWeight:600,lineHeight:1.5,color:"#22C55E",whiteSpace:"pre-line"}}>
+              <div style={{flex:1,fontSize:15,fontWeight:600,lineHeight:1.5,color:"#22C55E",whiteSpace:"pre-line"}}>
                 {editedText}
               </div>
               <button onClick={e=>{e.stopPropagation();onEdit(item, null)}}
-                style={{fontSize:10,fontWeight:600,padding:"2px 6px",borderRadius:4,
+                style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:4,
                   border:`1px solid ${C.bd}`,background:"rgba(255,255,255,0.04)",
                   color:C.txM,cursor:"pointer",flexShrink:0,marginTop:2}}
                 title="수정 취소 (원래 자막으로 되돌리기)">↩ undo</button>
@@ -1343,32 +1343,32 @@ function GuideCard({ item, active, onClick, blocks, verdict, onVerdict, editedTe
         <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2}
           autoFocus
           style={{width:"100%",padding:"6px 8px",borderRadius:6,border:`1px solid ${C.ac}`,
-            background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,fontFamily:"'Pretendard',sans-serif",
+            background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:14,fontFamily:"'Pretendard',sans-serif",
             lineHeight:1.5,resize:"vertical",outline:"none"}}
           onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();saveEdit(e);}if(e.key==="Escape")cancelEdit(e);}}
         />
         <div style={{display:"flex",gap:4,marginTop:4,justifyContent:"flex-end"}}>
-          <button onClick={cancelEdit} style={{fontSize:11,padding:"3px 10px",borderRadius:4,
+          <button onClick={cancelEdit} style={{fontSize:12,padding:"3px 10px",borderRadius:4,
             border:`1px solid ${C.bd}`,background:"transparent",color:C.txM,cursor:"pointer"}}>취소</button>
-          <button onClick={saveEdit} style={{fontSize:11,padding:"3px 10px",borderRadius:4,
+          <button onClick={saveEdit} style={{fontSize:12,padding:"3px 10px",borderRadius:4,
             border:"none",background:C.ac,color:"#fff",fontWeight:600,cursor:"pointer"}}>저장</button>
         </div>
       </div>
     )}
 
-    {item.type_name && <div style={{fontSize:11,color:C.txD,marginTop:2}}>{item.type_name}</div>}
+    {item.type_name && <div style={{fontSize:12,color:C.txD,marginTop:2}}>{item.type_name}</div>}
     {open && <div style={{background:"rgba(0,0,0,0.25)",borderRadius:8,padding:10,marginTop:8,border:`1px solid ${C.bd}`}}>
-      <div style={{fontSize:12,color:C.txM,marginBottom:4}}><b>사유:</b> {item.reason}</div>
-      {item.source_text && <div style={{fontSize:12,color:C.txD}}><b>원문:</b> {item.source_text}</div>}
-      {item.placement_hint && <div style={{fontSize:12,color:C.txD,marginTop:4}}><b>배치:</b> {item.placement_hint}</div>}
+      <div style={{fontSize:13,color:C.txM,marginBottom:4}}><b>사유:</b> {item.reason}</div>
+      {item.source_text && <div style={{fontSize:13,color:C.txD}}><b>원문:</b> {item.source_text}</div>}
+      {item.placement_hint && <div style={{fontSize:13,color:C.txD,marginTop:4}}><b>배치:</b> {item.placement_hint}</div>}
     </div>}
     <div style={{display:"flex",alignItems:"center",gap:4,marginTop:6}}>
-      <button onClick={e=>{e.stopPropagation();setOpen(!open)}} style={{fontSize:11,color:C.ac,background:"none",border:"none",cursor:"pointer",padding:"2px 0"}}>
+      <button onClick={e=>{e.stopPropagation();setOpen(!open)}} style={{fontSize:12,color:C.ac,background:"none",border:"none",cursor:"pointer",padding:"2px 0"}}>
         {open?"접기 ▲":"상세 ▼"}</button>
       <div style={{marginLeft:"auto",display:"flex",gap:3}}>
         {verdictOptions.map(v => (
           <button key={v.key} onClick={e=>handleVerdictClick(e, v.key)}
-            style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,cursor:"pointer",transition:"all 0.1s",
+            style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:4,cursor:"pointer",transition:"all 0.1s",
               border:`1px solid ${currentVerdict===v.key?v.color:"transparent"}`,
               background:currentVerdict===v.key?v.bg:"rgba(255,255,255,0.04)",
               color:currentVerdict===v.key?v.color:C.txD}}>
@@ -1381,12 +1381,12 @@ function GuideCard({ item, active, onClick, blocks, verdict, onVerdict, editedTe
     {relocating && currentVerdict === "use" && (
       <div onClick={e=>e.stopPropagation()} style={{marginTop:8,padding:"8px 10px",borderRadius:8,
         background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.25)"}}>
-        <div style={{fontSize:11,color:"#22C55E",fontWeight:600,marginBottom:6}}>📍 배치 위치 선택</div>
+        <div style={{fontSize:12,color:"#22C55E",fontWeight:600,marginBottom:6}}>📍 배치 위치 선택</div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:11,color:C.txM}}>블록 #</span>
+          <span style={{fontSize:12,color:C.txM}}>블록 #</span>
           <select value={relocTarget} onChange={e=>setRelocTarget(e.target.value)}
             style={{padding:"4px 8px",borderRadius:5,border:`1px solid ${C.bd}`,
-              background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:12,outline:"none",flex:1,maxWidth:200}}>
+              background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,outline:"none",flex:1,maxWidth:200}}>
             {blocks.map(b => (
               <option key={b.index} value={b.index}>
                 #{b.index} {b.speaker} {b.timestamp}
@@ -1394,13 +1394,13 @@ function GuideCard({ item, active, onClick, blocks, verdict, onVerdict, editedTe
             ))}
           </select>
           <button onClick={confirmRelocate}
-            style={{fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:5,border:"none",
+            style={{fontSize:12,fontWeight:600,padding:"4px 10px",borderRadius:5,border:"none",
               background:"#22C55E",color:"#fff",cursor:"pointer"}}>확인</button>
           <button onClick={e=>{e.stopPropagation();setRelocating(false)}}
-            style={{fontSize:11,padding:"4px 8px",borderRadius:5,border:`1px solid ${C.bd}`,
+            style={{fontSize:12,padding:"4px 8px",borderRadius:5,border:`1px solid ${C.bd}`,
               background:"transparent",color:C.txM,cursor:"pointer"}}>닫기</button>
         </div>
-        <div style={{fontSize:10,color:C.txD,marginTop:4}}>
+        <div style={{fontSize:11,color:C.txD,marginTop:4}}>
           현재: #{item.block_index} · 이 자막이 선택한 블록 아래에 표시됩니다
         </div>
       </div>
@@ -1420,27 +1420,27 @@ function ShareModal({ shareUrl, onClose }) {
     display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
     <div onClick={e=>e.stopPropagation()} style={{background:C.sf,borderRadius:16,padding:28,
       width:480,border:`1px solid ${C.bd}`}}>
-      <div style={{fontSize:17,fontWeight:700,color:C.tx,marginBottom:6}}>🔗 공유 링크 생성 완료</div>
-      <div style={{fontSize:13,color:C.txM,marginBottom:16}}>
+      <div style={{fontSize:18,fontWeight:700,color:C.tx,marginBottom:6}}>🔗 공유 링크 생성 완료</div>
+      <div style={{fontSize:14,color:C.txM,marginBottom:16}}>
         아래 링크를 편집자에게 전달하세요. 30일간 유효합니다.
       </div>
       <div style={{display:"flex",gap:8,marginBottom:20}}>
         <input readOnly value={shareUrl}
           style={{flex:1,padding:"9px 12px",borderRadius:8,border:`1px solid ${C.bd}`,
-            background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:12,fontFamily:"monospace",outline:"none"}}
+            background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,fontFamily:"monospace",outline:"none"}}
           onFocus={e=>e.target.select()}/>
         <button onClick={copy} style={{padding:"9px 16px",borderRadius:8,border:"none",
-          background:copied?C.ok:C.ac,color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",
+          background:copied?C.ok:C.ac,color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer",
           minWidth:72,transition:"background 0.2s"}}>
           {copied?"✓ 복사됨":"복사"}
         </button>
       </div>
-      <div style={{fontSize:12,color:C.txD,marginBottom:20}}>
+      <div style={{fontSize:13,color:C.txD,marginBottom:20}}>
         🔗 링크를 아는 사람은 열람 및 편집이 가능합니다.
       </div>
       <div style={{display:"flex",justifyContent:"flex-end"}}>
         <button onClick={onClose} style={{padding:"8px 20px",borderRadius:6,border:`1px solid ${C.bd}`,
-          background:"transparent",color:C.txM,fontSize:13,cursor:"pointer"}}>닫기</button>
+          background:"transparent",color:C.txM,fontSize:14,cursor:"pointer"}}>닫기</button>
       </div>
     </div>
   </div>;
@@ -1488,10 +1488,10 @@ function SessionListModal({ config, onLoad, onClose }) {
     <div onClick={e=>e.stopPropagation()} style={{background:C.sf,borderRadius:16,padding:28,
       width:560,maxHeight:"80vh",display:"flex",flexDirection:"column",border:`1px solid ${C.bd}`}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-        <div style={{fontSize:17,fontWeight:700,color:C.tx}}>📋 작업 히스토리</div>
-        <button onClick={onClose} style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:18}}>✕</button>
+        <div style={{fontSize:18,fontWeight:700,color:C.tx}}>📋 작업 히스토리</div>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:19}}>✕</button>
       </div>
-      <div style={{fontSize:12,color:C.txD,marginBottom:12}}>
+      <div style={{fontSize:13,color:C.txD,marginBottom:12}}>
         KV에 저장된 세션 목록입니다. 클릭하면 해당 작업을 불러옵니다.
       </div>
       <div style={{flex:1,overflowY:"auto"}}>
@@ -1505,10 +1505,10 @@ function SessionListModal({ config, onLoad, onClose }) {
             onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"}
             onClick={()=>onLoad(s.id)}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:14,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              <div style={{fontSize:15,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {s.fn || "제목 없음"}
               </div>
-              <div style={{fontSize:11,color:C.txD,marginTop:2,display:"flex",gap:8}}>
+              <div style={{fontSize:12,color:C.txD,marginTop:2,display:"flex",gap:8}}>
                 <span>{formatDate(s.savedAt)}</span>
                 <span>{s.blockCount || 0}블록</span>
                 {s.hasGuide && <span style={{color:C.hBd}}>가이드 ✓</span>}
@@ -1517,7 +1517,7 @@ function SessionListModal({ config, onLoad, onClose }) {
             </div>
             <button onClick={e=>{e.stopPropagation();handleDelete(s.id)}}
               disabled={deleting===s.id}
-              style={{fontSize:11,padding:"4px 8px",borderRadius:4,border:`1px solid ${C.bd}`,
+              style={{fontSize:12,padding:"4px 8px",borderRadius:4,border:`1px solid ${C.bd}`,
                 background:"transparent",color:C.txD,cursor:"pointer",flexShrink:0}}>
               {deleting===s.id?"...":"삭제"}
             </button>
@@ -1551,56 +1551,56 @@ function SettingsModal({ config, onSave, onClose }) {
       fillers:f.split(",").map(s=>s.trim()).filter(Boolean), customTerms:ct, chunkSize:parseInt(cs)||15000, spellcheck:sp});
   };
   const iS = {width:"100%",padding:"8px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
-    background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,fontFamily:FN,outline:"none"};
+    background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:14,fontFamily:FN,outline:"none"};
   return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100,
     display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
     <div onClick={e=>e.stopPropagation()} style={{background:C.sf,borderRadius:16,padding:28,
       width:480,maxHeight:"80vh",overflowY:"auto",border:`1px solid ${C.bd}`}}>
-      <div style={{fontSize:18,fontWeight:700,color:C.tx,marginBottom:20}}>⚙️ 설정</div>
+      <div style={{fontSize:19,fontWeight:700,color:C.tx,marginBottom:20}}>⚙️ 설정</div>
       <div style={{marginBottom:16}}>
-        <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>API 모드</label>
+        <label style={{fontSize:13,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>API 모드</label>
         <div style={{display:"flex",gap:4}}>
           {[["mock","Mock (데모)"],["live","Live (GPT-5.1)"]].map(([v,l])=>
             <button key={v} onClick={()=>setM(v)} style={{flex:1,padding:8,borderRadius:6,
               border:`1px solid ${m===v?C.ac:C.bd}`,background:m===v?C.acS:"transparent",
-              color:m===v?C.ac:C.txM,fontSize:13,fontWeight:600,cursor:"pointer"}}>{l}</button>)}
+              color:m===v?C.ac:C.txM,fontSize:14,fontWeight:600,cursor:"pointer"}}>{l}</button>)}
         </div>
       </div>
       {m==="live" && <div style={{marginBottom:16}}>
-        <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>Cloudflare Worker URL</label>
+        <label style={{fontSize:13,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>Cloudflare Worker URL</label>
         <input value={u} onChange={e=>setU(e.target.value)} placeholder="https://ttimes-editor.xxx.workers.dev" style={iS}/>
-        <div style={{fontSize:11,color:C.txD,marginTop:4}}>ttimes-editor Worker의 전체 URL</div>
+        <div style={{fontSize:12,color:C.txD,marginTop:4}}>ttimes-editor Worker의 전체 URL</div>
       </div>}
       <div style={{marginBottom:16}}>
-        <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>필러 단어 (쉼표 구분)</label>
+        <label style={{fontSize:13,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>필러 단어 (쉼표 구분)</label>
         <input value={f} onChange={e=>setF(e.target.value)} style={iS}/>
       </div>
       <div style={{marginBottom:16}}>
-        <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>
+        <label style={{fontSize:13,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>
           용어 사전 (줄바꿈, 형식: 올바른표기=오인식1,오인식2)</label>
         <textarea value={t} onChange={e=>setT(e.target.value)} rows={4}
           placeholder={"앤트로픽=엔트로피,엠트로픽\n프롬프트=프롬보트,프롬포트"} style={{...iS,resize:"vertical"}}/>
       </div>
       <div style={{marginBottom:20}}>
-        <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>청크 크기 (자)</label>
+        <label style={{fontSize:13,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>청크 크기 (자)</label>
         <input type="number" value={cs} onChange={e=>setCs(e.target.value)} style={{...iS,width:120}}/>
       </div>
       <div style={{marginBottom:20}}>
-        <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+        <label style={{fontSize:13,color:C.txM,fontWeight:600,display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
           <input type="checkbox" checked={sp} onChange={e=>setSp(e.target.checked)}
             style={{width:16,height:16,accentColor:C.ac,cursor:"pointer"}}/>
           Step 1.5 맞춤법 교정
         </label>
-        <div style={{fontSize:11,color:C.txD,marginTop:4,paddingLeft:24}}>
+        <div style={{fontSize:12,color:C.txD,marginTop:4,paddingLeft:24}}>
           띄어쓰기 · 맞춤법 · 조사 · 구두점 교정 (문장 구조 변경 없음)
         </div>
       </div>
       <div style={{marginBottom:20,padding:14,background:"rgba(0,0,0,0.2)",borderRadius:10,border:`1px solid ${C.bd}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <label style={{fontSize:12,color:C.txM,fontWeight:600}}>📚 팀 단어장 (정답 표기)</label>
-          <span style={{fontSize:12,color:C.ac,fontWeight:600}}>{dictList.length}건</span>
+          <label style={{fontSize:13,color:C.txM,fontWeight:600}}>📚 팀 단어장 (정답 표기)</label>
+          <span style={{fontSize:13,color:C.ac,fontWeight:600}}>{dictList.length}건</span>
         </div>
-        <div style={{fontSize:11,color:C.txD,marginBottom:10}}>
+        <div style={{fontSize:12,color:C.txD,marginBottom:10}}>
           정답 표기만 등록하면, AI가 발음 유사·문맥 유추로 오인식을 자동 매칭합니다.
           <br/>클릭하여 수정, × 버튼으로 삭제할 수 있습니다.
         </div>
@@ -1623,11 +1623,11 @@ function SettingsModal({ config, onSave, onClose }) {
                     if(e.key==="Escape") { setEditIdx(-1); }
                   }}
                   style={{padding:"3px 8px",borderRadius:12,border:`1px solid ${C.ac}`,
-                    background:"rgba(74,108,247,0.2)",color:C.tx,fontSize:12,fontFamily:FN,
+                    background:"rgba(74,108,247,0.2)",color:C.tx,fontSize:13,fontFamily:FN,
                     outline:"none",minWidth:60,width:Math.max(60, editVal.length*10)}}/>
               ) : (
                 <span key={i} style={{display:"inline-flex",alignItems:"center",gap:3,padding:"3px 8px",
-                  borderRadius:12,background:"rgba(74,108,247,0.12)",color:C.ac,fontSize:12,fontWeight:500,
+                  borderRadius:12,background:"rgba(74,108,247,0.12)",color:C.ac,fontSize:13,fontWeight:500,
                   cursor:"pointer"}}
                   onClick={()=>{ setEditIdx(i); setEditVal(word); }}>
                   {word}
@@ -1636,7 +1636,7 @@ function SettingsModal({ config, onSave, onClose }) {
                     const nd = dictList.filter((_,j)=>j!==i);
                     setDictList(nd);
                     await saveDictionaryToServer(nd, config);
-                  }} style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:11,
+                  }} style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:12,
                     padding:0,lineHeight:1,marginLeft:1}} title="삭제">×</button>
                 </span>
               )
@@ -1645,7 +1645,7 @@ function SettingsModal({ config, onSave, onClose }) {
         )}
         <div style={{display:"flex",gap:6}}>
           <input value={newDictWord} onChange={e=>setNewDictWord(e.target.value)}
-            placeholder="새 단어 추가 (Enter)" style={{...iS,flex:1,fontSize:12}}
+            placeholder="새 단어 추가 (Enter)" style={{...iS,flex:1,fontSize:13}}
             onKeyDown={async e=>{
               if(e.key==="Enter" && newDictWord.trim()){
                 const w = newDictWord.trim();
@@ -1665,21 +1665,21 @@ function SettingsModal({ config, onSave, onClose }) {
             }
             setNewDictWord("");
           }} style={{padding:"6px 14px",borderRadius:6,border:"none",background:C.ac,color:"#fff",
-            fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>추가</button>
+            fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>추가</button>
           <button onClick={async ()=>{
             if(confirm("단어장을 초기화하면 저장된 모든 교정 용어가 삭제됩니다.\n팀 전체 단어장이 초기화됩니다. 계속할까요?")) {
               setDictList([]);
               await saveDictionaryToServer([], config);
             }
           }} style={{padding:"6px 12px",borderRadius:6,border:"1px solid rgba(239,68,68,0.3)",
-            background:"transparent",color:"#EF4444",fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>초기화</button>
+            background:"transparent",color:"#EF4444",fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>초기화</button>
         </div>
       </div>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={{padding:"8px 20px",borderRadius:6,border:`1px solid ${C.bd}`,
-          background:"transparent",color:C.txM,fontSize:13,cursor:"pointer"}}>취소</button>
+          background:"transparent",color:C.txM,fontSize:14,cursor:"pointer"}}>취소</button>
         <button onClick={save} style={{padding:"8px 20px",borderRadius:6,border:"none",
-          background:C.ac,color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>저장</button>
+          background:C.ac,color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer"}}>저장</button>
       </div>
     </div>
   </div>;
@@ -1693,30 +1693,30 @@ function EditorialSummaryPanel({ summary, collapsed, onToggle }) {
   if (!summary) return null;
   return <div style={{background:C.sf,borderRadius:12,border:`1px solid ${C.bd}`,overflow:"hidden",marginBottom:16}}>
     <div onClick={onToggle} style={{padding:"14px 16px",borderBottom:collapsed?"none":`1px solid ${C.bd}`,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
-      <span style={{fontSize:15,fontWeight:700,color:C.tx}}>📋 콘텐츠 요약</span>
-      <span style={{fontSize:12,color:C.txD}}>{collapsed?"▸ 펼치기":"▾ 접기"}</span>
+      <span style={{fontSize:16,fontWeight:700,color:C.tx}}>📋 콘텐츠 요약</span>
+      <span style={{fontSize:13,color:C.txD}}>{collapsed?"▸ 펼치기":"▾ 접기"}</span>
     </div>
     {!collapsed && <div style={{padding:16}}>
-      {summary.one_liner && <div style={{fontSize:17,fontWeight:700,color:C.tx,marginBottom:14,lineHeight:1.5}}>{summary.one_liner}</div>}
+      {summary.one_liner && <div style={{fontSize:18,fontWeight:700,color:C.tx,marginBottom:14,lineHeight:1.5}}>{summary.one_liner}</div>}
       {summary.key_points?.length > 0 && <div style={{marginBottom:14}}>
-        <div style={{fontSize:13,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>핵심 논점</div>
-        {summary.key_points.map((p,i) => <div key={i} style={{fontSize:15,color:C.txM,lineHeight:1.6,
+        <div style={{fontSize:14,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>핵심 논점</div>
+        {summary.key_points.map((p,i) => <div key={i} style={{fontSize:16,color:C.txM,lineHeight:1.6,
           marginBottom:8,display:"flex",gap:8,alignItems:"flex-start"}}>
-          <span style={{flexShrink:0,fontSize:14,lineHeight:"1.5"}}>✅</span>
+          <span style={{flexShrink:0,fontSize:15,lineHeight:"1.5"}}>✅</span>
           <span>{p}</span>
         </div>)}
       </div>}
       {summary.notable_quotes?.length > 0 && <div style={{marginBottom:14}}>
-        <div style={{fontSize:13,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>핵심 발언</div>
-        {summary.notable_quotes.map((q,i) => <div key={i} style={{fontSize:15,color:C.tx,lineHeight:1.6,marginBottom:10,
+        <div style={{fontSize:14,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>핵심 발언</div>
+        {summary.notable_quotes.map((q,i) => <div key={i} style={{fontSize:16,color:C.tx,lineHeight:1.6,marginBottom:10,
           padding:"10px 14px",background:"rgba(255,255,255,0.04)",borderRadius:8,borderLeft:`3px solid ${C.fTx||C.ac}`}}>
-          <div style={{fontSize:12,color:C.fTx||C.ac,fontWeight:600,marginBottom:4}}>{q.speaker||""}</div>
+          <div style={{fontSize:13,color:C.fTx||C.ac,fontWeight:600,marginBottom:4}}>{q.speaker||""}</div>
           <div style={{fontStyle:"italic"}}>"{q.quote||q}"</div>
         </div>)}
       </div>}
       {summary.editor_notes && <div>
-        <div style={{fontSize:13,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>편집 참고</div>
-        <div style={{fontSize:14,color:C.txM,lineHeight:1.6,padding:"8px 12px",background:"rgba(255,255,255,0.04)",borderRadius:6}}>{summary.editor_notes}</div>
+        <div style={{fontSize:14,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>편집 참고</div>
+        <div style={{fontSize:15,color:C.txM,lineHeight:1.6,padding:"8px 12px",background:"rgba(255,255,255,0.04)",borderRadius:6}}>{summary.editor_notes}</div>
       </div>}
     </div>}
   </div>;
@@ -1767,7 +1767,7 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
   };
 
   const iS = { padding:"6px 10px", borderRadius:6, border:`1px solid ${C.bd}`,
-    background:"rgba(0,0,0,0.3)", color:C.tx, fontSize:13, fontFamily:FN, outline:"none", width:"100%" };
+    background:"rgba(0,0,0,0.3)", color:C.tx, fontSize:14, fontFamily:FN, outline:"none", width:"100%" };
 
   const confColor = (c) => c === "high" ? C.ok : C.wn;
   const confLabel = (c) => c === "high" ? "high" : "low";
@@ -1776,14 +1776,14 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
     <div style={{width:"100%", maxWidth:640}}>
       <div style={{marginBottom:24}}>
         <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:12,
-          background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.2)",fontSize:12,color:C.ok,marginBottom:12}}>
+          background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.2)",fontSize:13,color:C.ok,marginBottom:12}}>
           ✅ 사전 분석 완료</div>
-        <div style={{fontSize:20,fontWeight:700,color:C.tx,marginBottom:4}}>용어 교정 목록 검토</div>
-        {analysis?.overview?.topic && <div style={{fontSize:13,color:C.txM}}>주제: {analysis.overview.topic}</div>}
-        {analysis?.genre?.primary && <div style={{fontSize:12,color:C.txD,marginTop:2}}>
+        <div style={{fontSize:21,fontWeight:700,color:C.tx,marginBottom:4}}>용어 교정 목록 검토</div>
+        {analysis?.overview?.topic && <div style={{fontSize:14,color:C.txM}}>주제: {analysis.overview.topic}</div>}
+        {analysis?.genre?.primary && <div style={{fontSize:13,color:C.txD,marginTop:2}}>
           장르: {analysis.genre.primary}{analysis.genre.secondary ? ` + ${analysis.genre.secondary}` : ""} · 난이도: {analysis.tech_difficulty || "—"}
         </div>}
-        <div style={{fontSize:13,color:C.txD,marginTop:6}}>
+        <div style={{fontSize:14,color:C.txD,marginTop:6}}>
           AI가 발견한 STT 오인식 후보입니다. 확인 후 교정을 시작하세요.
         </div>
       </div>
@@ -1791,33 +1791,33 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
       {/* Step 0에서 발견된 오인식 매핑 테이블 (최상단) */}
       <div style={{background:C.sf,borderRadius:12,border:`1px solid ${C.bd}`,overflow:"hidden",marginBottom:16}}>
         <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.bd}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:12,fontWeight:700,color:C.txM}}>AI 발견 오인식 후보</span>
-          <span style={{fontSize:11,color:C.txD}}>{terms.length}건</span>
+          <span style={{fontSize:13,fontWeight:700,color:C.txM}}>AI 발견 오인식 후보</span>
+          <span style={{fontSize:12,color:C.txD}}>{terms.length}건</span>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"60px 1fr 24px 1fr 36px",gap:8,padding:"8px 14px",
-          borderBottom:`1px solid ${C.bd}`,fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em"}}>
+          borderBottom:`1px solid ${C.bd}`,fontSize:12,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em"}}>
           <span>신뢰도</span><span>원문 (오인식)</span><span></span><span>교정값</span><span></span>
         </div>
-        {terms.length === 0 && <div style={{padding:"24px",textAlign:"center",fontSize:13,color:C.txD}}>
+        {terms.length === 0 && <div style={{padding:"24px",textAlign:"center",fontSize:14,color:C.txD}}>
           항목 없음 — AI가 신규 오인식 후보를 찾지 못했습니다.
         </div>}
         {terms.map((t, i) => (
           <div key={i} style={{display:"grid",gridTemplateColumns:"60px 1fr 24px 1fr 36px",gap:8,
             padding:"8px 14px",borderBottom:`1px solid ${C.bd}`,alignItems:"center"}}>
-            <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,textAlign:"center",
+            <span style={{fontSize:11,fontWeight:700,padding:"2px 6px",borderRadius:4,textAlign:"center",
               background:`${confColor(t.confidence)}22`,color:confColor(t.confidence)}}>
               {confLabel(t.confidence)}
             </span>
             <input value={t.wrong} onChange={e=>update(i,"wrong",e.target.value)} style={iS} placeholder="오인식 단어"/>
-            <span style={{textAlign:"center",color:C.txD,fontSize:14}}>→</span>
+            <span style={{textAlign:"center",color:C.txD,fontSize:15}}>→</span>
             <input value={t.correct} onChange={e=>update(i,"correct",e.target.value)} style={iS} placeholder="올바른 표기"/>
             <button onClick={()=>remove(i)} style={{background:"none",border:"none",color:C.txD,cursor:"pointer",
-              fontSize:16,padding:0,textAlign:"center"}} title="삭제">✕</button>
+              fontSize:17,padding:0,textAlign:"center"}} title="삭제">✕</button>
           </div>
         ))}
         <div style={{padding:"10px 14px"}}>
           <button onClick={add} style={{background:"none",border:`1px dashed ${C.bd}`,borderRadius:6,
-            color:C.txM,fontSize:12,cursor:"pointer",padding:"6px 14px",width:"100%"}}>
+            color:C.txM,fontSize:13,cursor:"pointer",padding:"6px 14px",width:"100%"}}>
             + 항목 추가
           </button>
         </div>
@@ -1826,11 +1826,11 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
       {/* 확인/건너뛰기 버튼 */}
       <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:20}}>
         <button onClick={onSkip} style={{padding:"9px 20px",borderRadius:8,border:`1px solid ${C.bd}`,
-          background:"transparent",color:C.txM,fontSize:13,cursor:"pointer"}}>
+          background:"transparent",color:C.txM,fontSize:14,cursor:"pointer"}}>
           용어 교정 없이 진행
         </button>
         <button onClick={confirm} style={{padding:"9px 24px",borderRadius:8,border:"none",
-          background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:13,fontWeight:700,
+          background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:14,fontWeight:700,
           cursor:"pointer",boxShadow:"0 4px 14px rgba(74,108,247,0.3)"}}>
           교정 확정 → 1차 교정 시작
         </button>
@@ -1843,8 +1843,8 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
       {dictWords.length > 0 && (
         <div style={{background:C.sf,borderRadius:12,border:`1px solid ${C.bd}`,padding:14,marginBottom:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <span style={{fontSize:12,fontWeight:700,color:"#3B82F6"}}>📚 팀 단어장 ({dictWords.length}건)</span>
-            <span style={{fontSize:11,color:C.txD}}>클릭=수정 · ×=삭제</span>
+            <span style={{fontSize:13,fontWeight:700,color:"#3B82F6"}}>📚 팀 단어장 ({dictWords.length}건)</span>
+            <span style={{fontSize:12,color:C.txD}}>클릭=수정 · ×=삭제</span>
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
             {dictWords.map((word, i) => (
@@ -1856,16 +1856,16 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
                     if(e.key==="Escape") setDictEditIdx(-1);
                   }}
                   style={{padding:"3px 8px",borderRadius:12,border:`1px solid #3B82F6`,
-                    background:"rgba(59,130,246,0.2)",color:C.tx,fontSize:12,fontFamily:FN,
+                    background:"rgba(59,130,246,0.2)",color:C.tx,fontSize:13,fontFamily:FN,
                     outline:"none",minWidth:60,width:Math.max(60, dictEditVal.length*10)}}/>
               ) : (
                 <span key={i} style={{display:"inline-flex",alignItems:"center",gap:3,padding:"3px 10px",
-                  borderRadius:12,background:"rgba(59,130,246,0.12)",color:"#3B82F6",fontSize:12,fontWeight:500,
+                  borderRadius:12,background:"rgba(59,130,246,0.12)",color:"#3B82F6",fontSize:13,fontWeight:500,
                   cursor:"pointer"}}
                   onClick={()=>{ setDictEditIdx(i); setDictEditVal(word); }}>
                   {word}
                   <button onClick={(e)=>{e.stopPropagation(); dictDelete(i);}}
-                    style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:11,
+                    style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:12,
                       padding:0,lineHeight:1,marginLeft:1}} title="삭제">×</button>
                 </span>
               )
@@ -1876,7 +1876,7 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
 
       {/* 신규 단어 추가 (정답형) */}
       <div style={{background:C.sf,borderRadius:12,border:`1px solid ${C.bd}`,padding:14,marginBottom:16}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.txM,marginBottom:8}}>+ 단어장에 정답 추가</div>
+        <div style={{fontSize:13,fontWeight:700,color:C.txM,marginBottom:8}}>+ 단어장에 정답 추가</div>
         <div style={{display:"flex",gap:6}}>
           <input value={newWord} onChange={e=>setNewWord(e.target.value)} placeholder="정답 표기 입력 (예: 오픈AI)"
             style={{...iS,flex:1}} onKeyDown={async e=>{
@@ -1890,7 +1890,7 @@ function TermReviewScreen({ terms: initialTerms, analysis, onConfirm, onSkip }) 
             await dictAdd(newWord);
             setNewWord("");
           }} style={{padding:"6px 14px",borderRadius:6,border:"none",background:C.ac,color:"#fff",
-            fontSize:12,fontWeight:600,cursor:"pointer"}}>추가</button>
+            fontSize:13,fontWeight:600,cursor:"pointer"}}>추가</button>
         </div>
       </div>
 
@@ -2598,27 +2598,27 @@ export default function App() {
     <header style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",height:52,
       borderBottom:`1px solid ${C.bd}`,background:C.sf,flexShrink:0}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <span style={{fontSize:18,fontWeight:800,letterSpacing:"-0.03em"}}>
+        <span style={{fontSize:19,fontWeight:800,letterSpacing:"-0.03em"}}>
           <span style={{color:C.ac}}>티타임즈</span> 편집 CMS
         </span>
-        {fn && <span style={{fontSize:11,color:C.txD,padding:"2px 8px",background:"rgba(255,255,255,0.04)",borderRadius:4}}>{fn}</span>}
-        <span style={{fontSize:10,padding:"2px 6px",borderRadius:3,fontWeight:600,
+        {fn && <span style={{fontSize:12,color:C.txD,padding:"2px 8px",background:"rgba(255,255,255,0.04)",borderRadius:4}}>{fn}</span>}
+        <span style={{fontSize:11,padding:"2px 6px",borderRadius:3,fontWeight:600,
           background:cfg.apiMode==="live"?"rgba(34,197,94,0.15)":"rgba(251,191,36,0.15)",
           color:cfg.apiMode==="live"?C.ok:C.wn}}>{cfg.apiMode==="live"?"LIVE":"MOCK"}</span>
-        {autoSaveStatus && <span style={{fontSize:11,color:autoSaveStatus==="saved"?C.ok:"#9CA3AF",padding:"3px 8px",borderRadius:6,
+        {autoSaveStatus && <span style={{fontSize:12,color:autoSaveStatus==="saved"?C.ok:"#9CA3AF",padding:"3px 8px",borderRadius:6,
           background:autoSaveStatus==="saved"?"rgba(34,197,94,0.1)":"rgba(255,255,255,0.04)"}}>
           {autoSaveStatus==="pending"?"⏳ 자동 저장 대기":autoSaveStatus==="saving"?"💾 자동 저장 중...":"✓ 자동 저장됨"}
         </span>}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
-        {readOnly && <span style={{fontSize:11,padding:"3px 10px",borderRadius:12,fontWeight:600,
+        {readOnly && <span style={{fontSize:12,padding:"3px 10px",borderRadius:12,fontWeight:600,
           background:"rgba(168,85,247,0.15)",color:"#A855F7",border:"1px solid rgba(168,85,247,0.3)"}}>
           읽기 전용
         </span>}
         {hasData&&!termReview && <div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.04)",borderRadius:7,padding:2}}>
           {[["review","0차 원고검토"],["correction","1차 교정"],["script","스크립트 편집"],["guide","편집 가이드"]].map(([id,l])=>
             <button key={id} onClick={()=>setTab(id)} style={{padding:"5px 14px",borderRadius:5,border:"none",cursor:"pointer",
-              fontSize:12,fontWeight:tab===id?600:400,background:tab===id?C.ac:"transparent",
+              fontSize:13,fontWeight:tab===id?600:400,background:tab===id?C.ac:"transparent",
               color:tab===id?"#fff":C.txM,transition:"all 0.12s",
               opacity:id==="review"&&!reviewData?0.4:1,
               pointerEvents:id==="review"&&!reviewData?"none":"auto"}}>{l}{id==="guide"&&gReady?" ✓":""}</button>)}
@@ -2626,7 +2626,7 @@ export default function App() {
         {hasData && !readOnly && !termReview && (
           <button onClick={handleShare} disabled={saving} style={{padding:"5px 14px",borderRadius:6,border:"none",
             background:saving?"rgba(74,108,247,0.4)":sessionId?`linear-gradient(135deg,#22C55E,#16A34A)`:`linear-gradient(135deg,${C.ac},#7C3AED)`,
-            color:"#fff",fontSize:12,fontWeight:600,cursor:saving?"not-allowed":"pointer"}}>
+            color:"#fff",fontSize:13,fontWeight:600,cursor:saving?"not-allowed":"pointer"}}>
             {saving?"저장 중…":sessionId?"↑ 업데이트":"🔗 공유"}
           </button>
         )}
@@ -2634,29 +2634,29 @@ export default function App() {
         {hasData && !readOnly && !termReview && sessionId && (
           <button onClick={()=>{setSessionId(null);}} title="새 공유 링크 생성"
             style={{padding:"5px 8px",borderRadius:6,border:`1px solid ${C.bd}`,
-              background:"transparent",color:C.txM,fontSize:11,cursor:"pointer"}}>+ 새 링크</button>
+              background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>+ 새 링크</button>
         )}
         {hasData && (
           <button onClick={handleReset} title="새 파일 시작" style={{padding:"5px 10px",borderRadius:6,
-            border:`1px solid ${C.bd}`,background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>
+            border:`1px solid ${C.bd}`,background:"transparent",color:C.txM,fontSize:13,cursor:"pointer"}}>
             ✕ 새 파일
           </button>
         )}
         {!readOnly && <button onClick={()=>setShowSessions(true)} title="작업 히스토리"
           style={{padding:"5px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
-            background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>📋</button>}
+            background:"transparent",color:C.txM,fontSize:13,cursor:"pointer"}}>📋</button>}
         <button onClick={toggleTheme} title={theme==="dark"?"라이트 모드":"다크 모드"}
           style={{padding:"5px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
-            background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>{theme==="dark"?"☀️":"🌙"}</button>
+            background:"transparent",color:C.txM,fontSize:13,cursor:"pointer"}}>{theme==="dark"?"☀️":"🌙"}</button>
         {!readOnly && <button onClick={()=>setShowSet(true)} style={{padding:"5px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
-          background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>⚙️</button>}
+          background:"transparent",color:C.txM,fontSize:13,cursor:"pointer"}}>⚙️</button>}
       </div>
     </header>
 
     {err && <div style={{padding:"10px 20px",background:"rgba(239,68,68,0.1)",borderBottom:"1px solid rgba(239,68,68,0.2)",
-      fontSize:13,color:"#EF4444",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      fontSize:14,color:"#EF4444",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
       <span>⚠️ {err}</span>
-      <button onClick={()=>setErr(null)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:16}}>✕</button>
+      <button onClick={()=>setErr(null)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:17}}>✕</button>
     </div>}
 
     {(busy||gBusy) && <div style={{padding:"0 20px",flexShrink:0}}><Progress pct={prog.p} label={prog.l}/></div>}
@@ -2680,13 +2680,13 @@ export default function App() {
           onClick={()=>fileRef.current?.click()}
           style={{border:`2px dashed ${drag?C.ac:C.bd}`,borderRadius:16,padding:"56px 32px",textAlign:"center",
             cursor:"pointer",background:drag?C.acS:"transparent",transition:"all 0.2s"}}>
-          <div style={{fontSize:44,marginBottom:14,opacity:0.5}}>📄</div>
-          <div style={{fontSize:16,fontWeight:600,color:C.tx,marginBottom:6}}>docx 또는 txt 파일을 드래그하거나 클릭</div>
-          <div style={{fontSize:12,color:C.txD}}>클로바노트 STT 출력물 (.docx, .txt)</div>
+          <div style={{fontSize:45,marginBottom:14,opacity:0.5}}>📄</div>
+          <div style={{fontSize:17,fontWeight:600,color:C.tx,marginBottom:6}}>docx 또는 txt 파일을 드래그하거나 클릭</div>
+          <div style={{fontSize:13,color:C.txD}}>클로바노트 STT 출력물 (.docx, .txt)</div>
           <input ref={fileRef} type="file" accept=".docx,.txt" style={{display:"none"}}
             onChange={e=>onFileUpload(e.target.files?.[0])}/>
         </div>
-        <p style={{textAlign:"center",fontSize:13,color:C.txD,lineHeight:1.8,marginTop:16}}>
+        <p style={{textAlign:"center",fontSize:14,color:C.txD,lineHeight:1.8,marginTop:16}}>
           파일 업로드 → 자동 사전 분석 + 필러 제거 + 용어 교정<br/>
           이후 편집 가이드에서 강조자막 생성 (v2 룰북 2-Pass)
         </p>
@@ -2712,42 +2712,42 @@ export default function App() {
               <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
                 {/* 원본 분량 */}
                 <div style={{flex:1,minWidth:180,padding:14,borderRadius:10,background:"rgba(255,255,255,0.03)",border:`1px solid ${C.bd}`}}>
-                  <div style={{fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>📄 원본 분량</div>
-                  <div style={{fontSize:24,fontWeight:800,color:C.tx,marginBottom:4}}>{secondsToDisplay(duration.totalSeconds)}</div>
-                  <div style={{fontSize:12,color:C.txM}}>{duration.totalChars.toLocaleString()}자 · {usedBlocks.length}블록</div>
+                  <div style={{fontSize:12,fontWeight:700,color:C.txD,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>📄 원본 분량</div>
+                  <div style={{fontSize:25,fontWeight:800,color:C.tx,marginBottom:4}}>{secondsToDisplay(duration.totalSeconds)}</div>
+                  <div style={{fontSize:13,color:C.txM}}>{duration.totalChars.toLocaleString()}자 · {usedBlocks.length}블록</div>
                 </div>
                 {/* 예상 영상 길이 */}
                 <div style={{flex:1,minWidth:180,padding:14,borderRadius:10,background:"rgba(34,197,94,0.05)",border:"1px solid rgba(34,197,94,0.2)"}}>
-                  <div style={{fontSize:11,fontWeight:700,color:"#22C55E",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>🎬 예상 영상 길이</div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#22C55E",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>🎬 예상 영상 길이</div>
                   {(() => {
                     const cleanChars = reviewData.cleanTextChars || duration.keptChars;
                     const reg = calcRegression(cleanChars);
                     return <>
-                      <div style={{fontSize:24,fontWeight:800,color:"#22C55E"}}>{secondsToDisplay(reg.pointSec)}</div>
+                      <div style={{fontSize:25,fontWeight:800,color:"#22C55E"}}>{secondsToDisplay(reg.pointSec)}</div>
                       <div style={{marginTop:6,padding:"5px 10px",borderRadius:6,background:"rgba(34,197,94,0.08)",display:"inline-block"}}>
-                        <span style={{fontSize:12,color:C.txM,fontWeight:600}}>
+                        <span style={{fontSize:13,color:C.txM,fontWeight:600}}>
                           {secondsToDisplay(reg.lowSec)} ~ {secondsToDisplay(reg.highSec)}
                         </span>
-                        <span style={{fontSize:10,color:C.txD,marginLeft:6}}>(95% 신뢰구간)</span>
+                        <span style={{fontSize:11,color:C.txD,marginLeft:6}}>(95% 신뢰구간)</span>
                       </div>
-                      <div style={{marginTop:6,fontSize:10,color:C.txD}}>
+                      <div style={{marginTop:6,fontSize:11,color:C.txD}}>
                         {reg.count}건 학습 · 선형회귀 (LOO MAE 3.9%) · 삭제 후 {cleanChars.toLocaleString()}자
                       </div>
                       {duration.keptSeconds > 0 && (
-                        <div style={{fontSize:11,color:C.txD,marginTop:4}}>
+                        <div style={{fontSize:12,color:C.txD,marginTop:4}}>
                           타임스탬프 기준: {secondsToDisplay(duration.keptSeconds)}
                         </div>
                       )}
                     </>;
                   })()}
-                  <div style={{fontSize:12,color:C.txM,marginTop:4}}>{usedBlocks.length - delSet.size}블록 잔존</div>
+                  <div style={{fontSize:13,color:C.txM,marginTop:4}}>{usedBlocks.length - delSet.size}블록 잔존</div>
                 </div>
               </div>
               {/* 진행 버튼 */}
               <div style={{marginTop:14,display:"flex",gap:10,justifyContent:"flex-end"}}>
                 <button onClick={handleProceedToCorrection}
                   style={{padding:"9px 24px",borderRadius:8,border:"none",
-                    background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:13,fontWeight:700,
+                    background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:14,fontWeight:700,
                     cursor:"pointer",boxShadow:"0 4px 14px rgba(74,108,247,0.3)"}}>
                   {reviewData.hasTrackChanges ? "삭제선 제거 → 1차 교정 시작" : "1차 교정 시작"}
                 </button>
@@ -2755,7 +2755,7 @@ export default function App() {
             </div>
             {/* 원고 (삭제선 표시 — 블록화 없이 단락 그대로) */}
             <div style={{flex:1,overflowY:"auto"}}>
-              <div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
+              <div style={{padding:"8px 16px",fontSize:12,fontWeight:700,color:C.txD,textTransform:"uppercase",
                 letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2}}>
                 원고 검토{reviewData.hasTrackChanges ? " — 취소선은 빨간색으로 표시됩니다" : ""}
               </div>
@@ -2765,7 +2765,7 @@ export default function App() {
                   const allDeleted = p.every(s => s.deleted);
                   const paraText = p.map(s => s.text).join("");
                   if (!paraText.trim()) return <div key={pi} style={{height:12}}/>;
-                  return <p key={pi} style={{fontSize:14,lineHeight:1.9,color:C.tx,
+                  return <p key={pi} style={{fontSize:15,lineHeight:1.9,color:C.tx,
                     marginBottom:4,wordBreak:"keep-all",whiteSpace:"pre-wrap"}}>
                     {p.map((seg, si) => seg.deleted
                       ? <span key={si} style={{textDecoration:"line-through",textDecorationColor:"#EF4444",
@@ -2784,14 +2784,14 @@ export default function App() {
       {!termReview&&hasData&&tab==="correction" && <>
         <div style={{flex:1,display:"flex",overflow:"hidden"}}>
           <div ref={lRef} data-scroll-container style={{flex:1,overflowY:"auto",borderRight:`1px solid ${C.bd}`}}>
-            <div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
+            <div style={{padding:"8px 16px",fontSize:12,fontWeight:700,color:C.txD,textTransform:"uppercase",
               letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2}}>원문</div>
             {blocks.map(b=><BlockView key={b.index} block={b} side="left" active={aBlock===b.index}
               pos={findPositions(b.text,dm[b.index])} onClick={scrollTo}
               bRef={el=>{if(el)bEls.current[`l${b.index}`]=el}}/>)}
           </div>
           <div ref={rRef} data-scroll-container style={{flex:1,overflowY:"auto"}}>
-            <div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
+            <div style={{padding:"8px 16px",fontSize:12,fontWeight:700,color:C.txD,textTransform:"uppercase",
               letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2}}>수정본</div>
             {blocks.map(b=>{
               const idx = b.index;
@@ -2824,17 +2824,17 @@ export default function App() {
           const corrMs = Math.ceil(corrChars / 200);
           const diffChars = corrChars - origChars;
           const diffSign = diffChars > 0 ? "+" : "";
-          return <div style={{display:"flex",gap:20,padding:"10px 20px",background:C.sf,borderTop:`1px solid ${C.bd}`,fontSize:13,color:C.txM,flexShrink:0,flexWrap:"wrap"}}>
+          return <div style={{display:"flex",gap:20,padding:"10px 20px",background:C.sf,borderTop:`1px solid ${C.bd}`,fontSize:14,color:C.txM,flexShrink:0,flexWrap:"wrap"}}>
             <span>필러: <b style={{color:C.fTx}}>{fC}</b></span>
             <span>용어: <b style={{color:C.cTx}}>{tC}</b></span>
             {sC > 0 && <span>맞춤법: <b style={{color:C.scTx}}>{sC}</b></span>}
             <span>총: <b style={{color:C.tx}}>{fC+tC+sC}</b></span>
             {Object.keys(scriptEdits).length > 0 && <span>수동 수정: <b style={{color:"#22C55E"}}>{Object.keys(scriptEdits).length}</b></span>}
-            <span style={{marginLeft:"auto",borderLeft:`1px solid ${C.bd}`,paddingLeft:16,fontSize:12}}>
+            <span style={{marginLeft:"auto",borderLeft:`1px solid ${C.bd}`,paddingLeft:16,fontSize:13}}>
               원문 <b style={{color:C.tx}}>{origChars.toLocaleString()}</b>자 ({origMs}매)
               <span style={{margin:"0 6px",color:C.bd}}>→</span>
               수정본 <b style={{color:"#22C55E"}}>{corrChars.toLocaleString()}</b>자 ({corrMs}매)
-              <span style={{marginLeft:8,color:diffChars<0?"#22C55E":"#F59E0B",fontSize:11}}>({diffSign}{diffChars.toLocaleString()}자)</span>
+              <span style={{marginLeft:8,color:diffChars<0?"#22C55E":"#F59E0B",fontSize:12}}>({diffSign}{diffChars.toLocaleString()}자)</span>
             </span>
           </div>;
         })()}
@@ -3030,11 +3030,11 @@ export default function App() {
         return <div style={{display:"flex",flex:1,overflow:"hidden"}}>
           <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{flex:1,overflowY:"auto",padding:0}}>
-            <div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
+            <div style={{padding:"8px 16px",fontSize:12,fontWeight:700,color:C.txD,textTransform:"uppercase",
               letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2,
               display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span>최종 스크립트 편집</span>
-              <span style={{fontSize:11,color:C.txM,fontWeight:400,textTransform:"none",letterSpacing:0}}>
+              <span style={{fontSize:12,color:C.txM,fontWeight:400,textTransform:"none",letterSpacing:0}}>
                 블록을 클릭하면 편집할 수 있습니다{editedCount > 0 ? ` · 수동 수정 ${editedCount}건` : ""}
               </span>
             </div>
@@ -3055,19 +3055,19 @@ export default function App() {
             })}
           </div>
           <div style={{display:"flex",gap:12,padding:"10px 20px",background:C.sf,borderTop:`1px solid ${C.bd}`,
-            fontSize:13,color:C.txM,flexShrink:0,alignItems:"center"}}>
+            fontSize:14,color:C.txM,flexShrink:0,alignItems:"center"}}>
             <span>블록: <b style={{color:C.tx}}>{blocks.length}</b></span>
             {editedCount > 0 && <span>수동 수정: <b style={{color:"#22C55E"}}>{editedCount}</b></span>}
             <span>AI 교정: <b style={{color:C.cTx}}>{fC+tC+sC}</b></span>
             <button onClick={handleCopyRaw}
               style={{marginLeft:"auto",padding:"7px 16px",borderRadius:8,border:`1px solid ${C.bd}`,
-                background:"transparent",color:C.txM,fontSize:12,fontWeight:600,
+                background:"transparent",color:C.txM,fontSize:13,fontWeight:600,
                 cursor:"pointer"}}>
               📋 원본 복사
             </button>
             <button onClick={handleCopySubtitle}
               style={{padding:"7px 20px",borderRadius:8,border:"none",
-                background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:13,fontWeight:700,
+                background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:14,fontWeight:700,
                 cursor:"pointer",boxShadow:"0 3px 12px rgba(74,108,247,0.3)",
                 display:"flex",alignItems:"center",gap:6}}>
               🎬 자막용 복사
@@ -3077,7 +3077,7 @@ export default function App() {
           {/* 자막 2패널 — 우측 */}
           {subtitleResult && <div style={{width:420,minWidth:420,borderLeft:`1px solid ${C.bd}`,
             display:"flex",flexDirection:"column",background:"rgba(0,0,0,0.08)"}}>
-            <div style={{padding:"8px 14px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
+            <div style={{padding:"8px 14px",fontSize:12,fontWeight:700,color:C.txD,textTransform:"uppercase",
               letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span>자막 포맷팅 결과</span>
               <div style={{display:"flex",gap:6}}>
@@ -3087,15 +3087,15 @@ export default function App() {
                     ta.value = subtitleResult; ta.style.cssText = "position:fixed;left:-9999px";
                     document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
                   }
-                }} style={{fontSize:10,fontWeight:600,padding:"3px 10px",borderRadius:4,border:`1px solid ${C.bd}`,
+                }} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:`1px solid ${C.bd}`,
                   background:"rgba(255,255,255,0.06)",color:C.txM,cursor:"pointer"}}>📋 복사</button>
                 <button onClick={()=>setSubtitleResult(null)}
-                  style={{fontSize:10,fontWeight:600,padding:"3px 8px",borderRadius:4,border:`1px solid ${C.bd}`,
+                  style={{fontSize:11,fontWeight:600,padding:"3px 8px",borderRadius:4,border:`1px solid ${C.bd}`,
                     background:"rgba(255,255,255,0.06)",color:C.txD,cursor:"pointer"}}>✕ 닫기</button>
               </div>
             </div>
             <div style={{flex:1,overflowY:"auto",padding:"12px 16px"}}>
-              <pre style={{fontSize:13,color:C.tx,lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word",
+              <pre style={{fontSize:14,color:C.tx,lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word",
                 fontFamily:FN,margin:0}}>{subtitleResult}</pre>
             </div>
           </div>}
@@ -3106,26 +3106,26 @@ export default function App() {
       {!termReview&&hasData&&tab==="guide" && <>
         {!gReady&&!gBusy && <div style={{padding:48,textAlign:"center"}}>
           <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:16,
-            background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.2)",fontSize:12,color:C.ok,marginBottom:20}}>
+            background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.2)",fontSize:13,color:C.ok,marginBottom:20}}>
             ✅ 1차 교정 완료 — 필러 {fC}건, 용어 {tC}건</div>
           <div style={{display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap",maxWidth:560,margin:"0 auto"}}>
             <div onClick={handleGuide} style={{flex:1,minWidth:220,padding:24,borderRadius:14,border:`2px solid ${C.ac}`,
               background:`${C.ac}11`,cursor:"pointer",textAlign:"left",transition:"all .15s"}}>
-              <div style={{fontSize:16,fontWeight:700,color:C.tx,marginBottom:8}}>▶ 강조자막 생성하기</div>
-              <div style={{fontSize:13,color:C.txM,lineHeight:1.5}}>AI가 일괄 생성하는 강조자막 프로세스</div>
-              <div style={{fontSize:11,color:C.txD,marginTop:6}}>Draft Agent → Editor Agent (2-Pass)</div>
+              <div style={{fontSize:17,fontWeight:700,color:C.tx,marginBottom:8}}>▶ 강조자막 생성하기</div>
+              <div style={{fontSize:14,color:C.txM,lineHeight:1.5}}>AI가 일괄 생성하는 강조자막 프로세스</div>
+              <div style={{fontSize:12,color:C.txD,marginTop:6}}>Draft Agent → Editor Agent (2-Pass)</div>
             </div>
             <div onClick={()=>{setTab("guide"); setGReady(true);}} style={{flex:1,minWidth:220,padding:24,borderRadius:14,border:`2px solid ${C.bd}`,
               background:C.sf,cursor:"pointer",textAlign:"left",transition:"all .15s"}}>
-              <div style={{fontSize:16,fontWeight:700,color:C.tx,marginBottom:8}}>✏️ 내가 직접 편집하기</div>
-              <div style={{fontSize:13,color:C.txM,lineHeight:1.5}}>편집자가 직접 읽으면서 강조자막을 부분 생성할 수 있습니다</div>
-              <div style={{fontSize:11,color:C.txD,marginTop:6}}>텍스트 드래그 → 부분 생성</div>
+              <div style={{fontSize:17,fontWeight:700,color:C.tx,marginBottom:8}}>✏️ 내가 직접 편집하기</div>
+              <div style={{fontSize:14,color:C.txM,lineHeight:1.5}}>편집자가 직접 읽으면서 강조자막을 부분 생성할 수 있습니다</div>
+              <div style={{fontSize:12,color:C.txD,marginTop:6}}>텍스트 드래그 → 부분 생성</div>
             </div>
           </div>
         </div>}
         {gReady && <div style={{flex:1,display:"flex",overflow:"hidden"}}>
           <div ref={lRef} data-scroll-container style={{flex:1,overflowY:"auto",borderRight:`1px solid ${C.bd}`}}>
-            <div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
+            <div style={{padding:"8px 16px",fontSize:12,fontWeight:700,color:C.txD,textTransform:"uppercase",
               letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2,
               display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <span>교정본</span>
@@ -3133,7 +3133,7 @@ export default function App() {
                 {bookmark != null && <button onClick={()=>{
                   const el = bEls.current[`g${bookmark}`];
                   if (el) el.scrollIntoView({behavior:"smooth",block:"center"});
-                }} style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,border:`1px solid #F59E0B`,
+                }} style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:4,border:`1px solid #F59E0B`,
                   background:"rgba(245,158,11,0.12)",color:"#F59E0B",cursor:"pointer",textTransform:"none",letterSpacing:0}}>
                   📌 #{bookmark} 이동
                 </button>}
@@ -3154,7 +3154,7 @@ export default function App() {
                     }
                     setBookmark(closest);
                   }
-                }} style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,
+                }} style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:4,
                   border:`1px solid ${bookmark!=null?"#F59E0B":C.bd}`,
                   background:bookmark!=null?"rgba(245,158,11,0.12)":"transparent",
                   color:bookmark!=null?"#F59E0B":C.txM,cursor:"pointer",textTransform:"none",letterSpacing:0}}>
@@ -3165,11 +3165,11 @@ export default function App() {
             {matchingMode && <div style={{padding:"6px 16px",background:MARKER_COLORS[matchingMode.color]?.bg,
               borderBottom:`1px solid ${MARKER_COLORS[matchingMode.color]?.border}`,
               display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:28,zIndex:2}}>
-              <span style={{fontSize:12,fontWeight:600,color:MARKER_COLORS[matchingMode.color]?.border}}>
+              <span style={{fontSize:13,fontWeight:600,color:MARKER_COLORS[matchingMode.color]?.border}}>
                 🖍 블록 #{matchingMode.blockIdx}에서 텍스트를 드래그하여 형광펜을 칠하세요
               </span>
               <button onClick={()=>setMatchingMode(null)}
-                style={{fontSize:11,padding:"2px 10px",borderRadius:4,border:`1px solid ${MARKER_COLORS[matchingMode.color]?.border}`,
+                style={{fontSize:12,padding:"2px 10px",borderRadius:4,border:`1px solid ${MARKER_COLORS[matchingMode.color]?.border}`,
                   background:"rgba(0,0,0,0.3)",color:MARKER_COLORS[matchingMode.color]?.border,cursor:"pointer",fontWeight:600}}>완료</button>
             </div>}
             {blocks.map(b=>{
@@ -3183,7 +3183,7 @@ export default function App() {
               return <div key={idx}>
               {bookmark === idx && <div style={{padding:"4px 16px",background:"rgba(245,158,11,0.1)",
                 borderBottom:`2px solid #F59E0B`,display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:11,fontWeight:700,color:"#F59E0B"}}>📌 책갈피 — 여기까지 확인함</span>
+                <span style={{fontSize:12,fontWeight:700,color:"#F59E0B"}}>📌 책갈피 — 여기까지 확인함</span>
               </div>}
               <div ref={el=>{if(el)bEls.current[`g${idx}`]=el}} onClick={()=>scrollTo(idx)}
                 onMouseUp={(e)=>{
@@ -3198,13 +3198,13 @@ export default function App() {
                   background:aBlock===idx?"rgba(168,85,247,0.08)":hasScriptEdit?"rgba(34,197,94,0.04)":"transparent",
                   cursor:"pointer",transition:"all 0.25s ease"}}>
                 <div style={{marginBottom:4,display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:10,fontWeight:700,color:C.txD,fontFamily:"monospace",
+                  <span style={{fontSize:11,fontWeight:700,color:C.txD,fontFamily:"monospace",
                     background:"rgba(255,255,255,0.06)",padding:"1px 5px",borderRadius:3}}>#{idx}</span>
                   <Badge name={b.speaker}/>
-                  <span style={{fontSize:11,color:C.txD,fontFamily:"monospace"}}>{b.timestamp}</span>
-                  {hasScriptEdit && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,
+                  <span style={{fontSize:12,color:C.txD,fontFamily:"monospace"}}>{b.timestamp}</span>
+                  {hasScriptEdit && <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,
                     background:"rgba(34,197,94,0.15)",color:"#22C55E"}}>수정됨</span>}
-                  {activeMatchBlock===idx && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,
+                  {activeMatchBlock===idx && <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,
                     background:MARKER_COLORS[matchingMode?.color]?.bg,color:MARKER_COLORS[matchingMode?.color]?.border,
                     border:`1px solid ${MARKER_COLORS[matchingMode?.color]?.border}`}}>
                     🖍 드래그로 구간 선택</span>}
@@ -3258,20 +3258,20 @@ export default function App() {
                     {usedGuides.length > 1 && <div style={{display:"flex",flexDirection:"column",gap:1,flexShrink:0}}>
                       <button onClick={e=>{e.stopPropagation();if(canUp)swapInHl(g,usedGuides[gi-1])}}
                         disabled={!canUp}
-                        style={{fontSize:9,lineHeight:1,padding:"1px 4px",border:"none",borderRadius:3,
+                        style={{fontSize:10,lineHeight:1,padding:"1px 4px",border:"none",borderRadius:3,
                           background:canUp?"rgba(255,255,255,0.08)":"transparent",
                           color:canUp?C.txM:"transparent",cursor:canUp?"pointer":"default"}}>▲</button>
                       <button onClick={e=>{e.stopPropagation();if(canDown)swapInHl(g,usedGuides[gi+1])}}
                         disabled={!canDown}
-                        style={{fontSize:9,lineHeight:1,padding:"1px 4px",border:"none",borderRadius:3,
+                        style={{fontSize:10,lineHeight:1,padding:"1px 4px",border:"none",borderRadius:3,
                           background:canDown?"rgba(255,255,255,0.08)":"transparent",
                           color:canDown?C.txM:"transparent",cursor:canDown?"pointer":"default"}}>▼</button>
                     </div>}
-                    <span style={{fontSize:11,color:mc?.border||typeColor,fontWeight:700,flexShrink:0}}>▶</span>
+                    <span style={{fontSize:12,color:mc?.border||typeColor,fontWeight:700,flexShrink:0}}>▶</span>
                     <TypeBadge type={g.type} onChangeType={(newCat)=>{
                       setHl(prev => prev.map(h => h === g ? {...h, type: newCat + (g.type?.slice(1)||"1")} : h));
                     }}/>
-                    <div style={{flex:1,fontSize:13,fontWeight:500,color:mc?.border||typeColor,lineHeight:1.4,whiteSpace:"pre-line"}}>
+                    <div style={{flex:1,fontSize:14,fontWeight:500,color:mc?.border||typeColor,lineHeight:1.4,whiteSpace:"pre-line"}}>
                       {displaySubtitle}
                     </div>
                     {/* 형광펜 색상 선택 */}
@@ -3297,7 +3297,7 @@ export default function App() {
                       {/* 형광펜 지우기 */}
                       {marker && <button onClick={e=>{e.stopPropagation();handleMarkerClear(gKey);setMatchingMode(null)}}
                         title="형광펜 지우기"
-                        style={{fontSize:9,lineHeight:1,padding:"2px 4px",border:`1px solid ${C.bd}`,borderRadius:3,
+                        style={{fontSize:10,lineHeight:1,padding:"2px 4px",border:`1px solid ${C.bd}`,borderRadius:3,
                           background:"rgba(255,255,255,0.06)",color:C.txD,cursor:"pointer"}}>✕</button>}
                     </div>
                     {/* 복사 버튼 */}
@@ -3305,7 +3305,7 @@ export default function App() {
                       navigator.clipboard.writeText(displaySubtitle);
                       const btn=e.currentTarget;btn.textContent="✓";
                       setTimeout(()=>{btn.textContent="복사"},1200);
-                    }} style={{fontSize:10,fontWeight:600,padding:"3px 8px",borderRadius:4,border:`1px solid ${C.bd}`,
+                    }} style={{fontSize:11,fontWeight:600,padding:"3px 8px",borderRadius:4,border:`1px solid ${C.bd}`,
                       background:"rgba(255,255,255,0.06)",color:C.txM,cursor:"pointer",flexShrink:0,
                       minWidth:36,transition:"all 0.15s"}}>복사</button>
                   </div>;
@@ -3315,7 +3315,7 @@ export default function App() {
               {aBlock===b.index && addingAt!==b.index && (
                 <div style={{padding:"4px 16px 8px",display:"flex",justifyContent:"flex-end"}}>
                   <button onClick={e=>{e.stopPropagation();setAddingAt(b.index);setAddForm({subtitle:"",type:"A1"})}}
-                    style={{fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:6,
+                    style={{fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:6,
                       border:`1px dashed ${C.hBd}`,background:"rgba(168,85,247,0.08)",
                       color:C.hBd,cursor:"pointer"}}>+ 자막 추가</button>
                 </div>
@@ -3327,7 +3327,7 @@ export default function App() {
                   <div style={{display:"flex",gap:6,marginBottom:8}}>
                     {[["A1","강조자막"],["B2","용어 설명"],["C_user1","자료"]].map(([t,l])=>
                       <button key={t} onClick={()=>setAddForm(f=>({...f,type:t}))}
-                        style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,cursor:"pointer",
+                        style={{fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:5,cursor:"pointer",
                           border:`1px solid ${addForm.type===t?C.hBd:"transparent"}`,
                           background:addForm.type===t?"rgba(168,85,247,0.15)":"rgba(255,255,255,0.04)",
                           color:addForm.type===t?C.hBd:C.txD}}>{l}</button>)}
@@ -3338,10 +3338,10 @@ export default function App() {
                       <input value={addForm.termInput||""} onChange={e=>setAddForm(f=>({...f,termInput:e.target.value}))}
                         placeholder="용어를 입력하세요 (예: 에이전트)"
                         style={{flex:1,padding:"5px 8px",borderRadius:6,border:`1px solid ${C.bd}`,
-                          background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:12,outline:"none"}}
+                          background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,outline:"none"}}
                         onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();handleTermGen();}}}/>
                       <button onClick={handleTermGen} disabled={addForm.generating}
-                        style={{fontSize:11,fontWeight:600,padding:"4px 10px",borderRadius:5,border:"none",
+                        style={{fontSize:12,fontWeight:600,padding:"4px 10px",borderRadius:5,border:"none",
                           background:addForm.generating?"rgba(59,130,246,0.3)":"rgba(59,130,246,0.8)",
                           color:"#fff",cursor:addForm.generating?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
                         {addForm.generating?"생성 중...":"AI 설명 생성"}</button>
@@ -3351,15 +3351,15 @@ export default function App() {
                     placeholder={addForm.type==="B2"?"용어(English) : 설명":addForm.type==="C1"?"자료 내용 (예: 관련 기사 캡쳐 이미지)":"강조자막 내용"}
                     rows={2} autoFocus={addForm.type!=="B2"}
                     style={{width:"100%",padding:"6px 8px",borderRadius:6,border:`1px solid ${C.bd}`,
-                      background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,fontFamily:"'Pretendard',sans-serif",
+                      background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:14,fontFamily:"'Pretendard',sans-serif",
                       lineHeight:1.5,resize:"vertical",outline:"none"}}
                     onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleAddSubtitle();}if(e.key==="Escape")setAddingAt(null);}}/>
                   <div style={{display:"flex",gap:4,marginTop:6,justifyContent:"flex-end"}}>
                     <button onClick={()=>setAddingAt(null)}
-                      style={{fontSize:11,padding:"3px 10px",borderRadius:4,border:`1px solid ${C.bd}`,
+                      style={{fontSize:12,padding:"3px 10px",borderRadius:4,border:`1px solid ${C.bd}`,
                         background:"transparent",color:C.txM,cursor:"pointer"}}>취소</button>
                     <button onClick={handleAddSubtitle}
-                      style={{fontSize:11,padding:"3px 10px",borderRadius:4,border:"none",
+                      style={{fontSize:12,padding:"3px 10px",borderRadius:4,border:"none",
                         background:C.hBd,color:"#fff",fontWeight:600,cursor:"pointer"}}>추가</button>
                   </div>
                 </div>
@@ -3372,31 +3372,31 @@ export default function App() {
             <button onClick={()=>handlePartialGenerate(selPopup.blockIdx, selPopup.text)}
               disabled={partialBusy}
               style={{padding:"6px 14px",borderRadius:6,border:"none",
-                background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:12,fontWeight:700,
+                background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",fontSize:13,fontWeight:700,
                 cursor:partialBusy?"wait":"pointer",opacity:partialBusy?0.6:1}}>
               {partialBusy ? "⏳ 생성 중..." : "✨ 이 구간으로 자막 생성"}
             </button>
             <button onClick={()=>setSelPopup(null)}
-              style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:14}}>✕</button>
+              style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:15}}>✕</button>
           </div>}
           {partialBusy && <div style={{padding:"8px 16px",background:"rgba(74,108,247,0.1)",
-            borderTop:`1px solid ${C.ac}`,fontSize:12,color:C.ac,textAlign:"center"}}>
+            borderTop:`1px solid ${C.ac}`,fontSize:13,color:C.ac,textAlign:"center"}}>
             ⏳ 부분 강조자막 생성 중...
           </div>}
           </div>
           <div ref={rRef} data-scroll-container style={{width:400,minWidth:400,overflowY:"auto",background:"rgba(0,0,0,0.12)"}}>
-            <div style={{padding:"8px 14px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
+            <div style={{padding:"8px 14px",fontSize:12,fontWeight:700,color:C.txD,textTransform:"uppercase",
               letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.sf,zIndex:2,
               display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span>강조자막 가이드</span>
               {!guides.length && !gBusy && <button onClick={handleGuide}
-                style={{fontSize:10,fontWeight:600,padding:"3px 10px",borderRadius:5,border:"none",
+                style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,border:"none",
                   background:`linear-gradient(135deg,${C.ac},#7C3AED)`,color:"#fff",cursor:"pointer"}}>
                 일괄 생성하기
               </button>}
             </div>
             <div style={{padding:"6px 10px"}}>
-              {!guides.length && <p style={{padding:20,textAlign:"center",fontSize:12,color:C.txD}}>항목 없음</p>}
+              {!guides.length && <p style={{padding:20,textAlign:"center",fontSize:13,color:C.txD}}>항목 없음</p>}
               {guides.map((g,i)=><div key={`hl-${i}`} data-hl-block={g.block_index}>
                 <GuideCard item={g}
                 blocks={blocks}
@@ -3456,11 +3456,11 @@ export default function App() {
           </div>
         </div>}
         {gReady && <div style={{display:"flex",gap:20,padding:"10px 20px",background:C.sf,borderTop:`1px solid ${C.bd}`,
-          fontSize:13,color:C.txM,flexShrink:0}}>
+          fontSize:14,color:C.txM,flexShrink:0}}>
           <span>강조자막: <b style={{color:C.hBd}}>{hl.length}</b></span>
           {hlStats && <>
             <span style={{color:C.txD}}>|</span>
-            <span style={{fontSize:12}}>Draft {hlStats.draft_count}건 → Final {hlStats.final_count}건 ({hlStats.removal_rate} 필터링)</span>
+            <span style={{fontSize:13}}>Draft {hlStats.draft_count}건 → Final {hlStats.final_count}건 ({hlStats.removal_rate} 필터링)</span>
           </>}
           {(() => {
             const vals = Object.values(hlVerdicts).filter(Boolean);
@@ -3470,7 +3470,7 @@ export default function App() {
             if (useC + disC === 0) return null;
             return <>
               <span style={{color:C.txD}}>|</span>
-              <span style={{fontSize:12}}>
+              <span style={{fontSize:13}}>
                 <span style={{color:"#22C55E"}}>사용 {useC}</span>
                 {" · "}<span style={{color:"#EF4444"}}>폐기 {disC}</span>
                 {" · "}<span style={{color:C.txD}}>미선택 {unchk}</span>
