@@ -1153,30 +1153,13 @@ function fixQuotesV2(lines) {
 // ═══════════════════════════════════════
 
 async function handleSubtitleFormat(body, env, headers) {
-  console.log("[subtitle-format] 요청 수신:", JSON.stringify({ hasText: !!body.text, version: body.version, hasBlocks: !!body.blocks, textLen: body.text?.length }));
-  
-  // V2.2: { text, version: "v2" } 또는 V1 호환: { blocks: [...] }
-  let fullText;
-  if (body.text && body.version === "v2") {
-    fullText = body.text;
-  } else if (body.blocks && Array.isArray(body.blocks) && body.blocks.length > 0) {
-    fullText = body.blocks.map(b => b.text).join('\n');
-  } else {
-    return new Response(JSON.stringify({ error: "text or blocks required" }), { status: 400, headers });
-  }
+  // V2.2: { text (numbered), words, version: "v2" } — 프론트에서 청크 분할 + 어절 번호 매겨서 전송
+  if (body.version === "v2" && body.text && body.words) {
+    const numbered = body.text;
+    const words = body.words;
+    const wordCount = words.length;
 
-  // ── 전처리: 메타 제거 + 어절 번호 부여 + 청크 분할 ──
-  const { words } = preprocessForV2(fullText);
-  const wordChunks = chunkWords(words);
-  console.log(`[subtitle-format] 전처리 완료: ${words.length}어절 → ${wordChunks.length}청크`);
-
-  // ── 각 청크별 모델 호출 ──
-  let allBreaksAfter = [];
-  const chunkDebug = [];
-
-  for (let ci = 0; ci < wordChunks.length; ci++) {
-    const chunk = wordChunks[ci];
-    console.log(`[subtitle-format] 청크 ${ci+1}/${wordChunks.length} 호출 시작 (${chunk.words.length}어절)`);
+    // ── 모델 호출 (단일 청크) ──
     let response;
     try {
       response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -1186,7 +1169,7 @@ async function handleSubtitleFormat(body, env, headers) {
           model: "gpt-5.4-mini",
           messages: [
             { role: "system", content: SUBTITLE_FORMAT_PROMPT },
-            { role: "user", content: chunk.numbered },
+            { role: "user", content: numbered },
           ],
           temperature: 0.1,
           max_completion_tokens: 2000,
@@ -1194,12 +1177,10 @@ async function handleSubtitleFormat(body, env, headers) {
         }),
       });
     } catch (netErr) {
-      chunkDebug.push({ error: netErr.message });
-      continue;
+      return new Response(JSON.stringify({ error: `Network error: ${netErr.message}`, _debug: { wordCount, error: netErr.message } }), { status: 502, headers });
     }
 
     if (response.status === 429) {
-      // 레이트 리밋 시 3초 대기 후 재시도
       await new Promise(r => setTimeout(r, 3000));
       try {
         response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -1209,7 +1190,7 @@ async function handleSubtitleFormat(body, env, headers) {
             model: "gpt-5.4-mini",
             messages: [
               { role: "system", content: SUBTITLE_FORMAT_PROMPT },
-              { role: "user", content: chunk.numbered },
+              { role: "user", content: numbered },
             ],
             temperature: 0.1,
             max_completion_tokens: 2000,
@@ -1217,20 +1198,20 @@ async function handleSubtitleFormat(body, env, headers) {
           }),
         });
       } catch (e) {
-        chunkDebug.push({ error: "retry failed" });
-        continue;
+        return new Response(JSON.stringify({ error: "Rate limit retry failed", _debug: { wordCount } }), { status: 429, headers });
       }
     }
 
     if (!response.ok) {
-      console.log(`[subtitle-format] 청크 ${ci+1} 에러: HTTP ${response.status}`);
-      chunkDebug.push({ error: `HTTP ${response.status}` });
-      continue;
+      const errText = await response.text();
+      return new Response(JSON.stringify({ error: `OpenAI API error ${response.status}`, _debug: { wordCount, error: errText.substring(0, 300) } }), { status: response.status, headers });
     }
 
     const data = await response.json();
     const rawContent = data.choices?.[0]?.message?.content || "";
-    console.log(`[subtitle-format] 청크 ${ci+1} 응답: ${rawContent.length}자, finish=${data.choices?.[0]?.finish_reason}`);
+    const finishReason = data.choices?.[0]?.finish_reason;
+
+    // ── 파싱: breaks_after 추출 ──
     let breaksAfter = null;
 
     try {
@@ -1239,8 +1220,7 @@ async function handleSubtitleFormat(body, env, headers) {
       if (braceStart !== -1 && braceEnd > braceStart) {
         const parsed = JSON.parse(rawContent.substring(braceStart, braceEnd + 1));
         if (Array.isArray(parsed.breaks_after)) {
-          // globalOffset 적용하지 않음 — 이미 글로벌 인덱스로 번호를 매겼음
-          breaksAfter = parsed.breaks_after.filter(n => typeof n === 'number' && n >= 1 && n <= words.length);
+          breaksAfter = parsed.breaks_after.filter(n => typeof n === 'number' && n >= 1 && n < wordCount);
         }
       }
     } catch (e) { /* fallback */ }
@@ -1248,52 +1228,76 @@ async function handleSubtitleFormat(body, env, headers) {
     if (!breaksAfter) {
       try {
         const arrMatch = rawContent.match(/\[[\d,\s]+\]/);
-        if (arrMatch) breaksAfter = JSON.parse(arrMatch[0]).filter(n => typeof n === 'number' && n >= 1 && n <= words.length);
+        if (arrMatch) breaksAfter = JSON.parse(arrMatch[0]).filter(n => typeof n === 'number' && n >= 1 && n < wordCount);
       } catch (e) { /* fallback */ }
     }
 
-    if (breaksAfter && breaksAfter.length > 0) {
-      allBreaksAfter.push(...breaksAfter);
+    // fallback: 글자수 기반 자동 분할
+    if (!breaksAfter || breaksAfter.length === 0) {
+      breaksAfter = [];
+      let charCount = 0;
+      for (let i = 0; i < words.length - 1; i++) {
+        charCount += words[i].length + 1;
+        if (charCount >= 20) { breaksAfter.push(i + 1); charCount = 0; }
+      }
     }
 
-    chunkDebug.push({
-      wordRange: `${chunk.globalOffset + 1}-${chunk.globalOffset + chunk.words.length}`,
-      breaks: breaksAfter || [],
-      raw: rawContent.substring(0, 200),
-    });
+    // ── 후처리 ──
+    const finalText = postProcessSubtitleV2(words, breaksAfter);
+
+    return new Response(JSON.stringify({
+      success: true,
+      formatted: finalText,
+      _debug: {
+        version: "v2.2",
+        wordCount,
+        breaksCount: breaksAfter.length,
+        outputLength: finalText.length,
+        finishReason,
+        breaksAfter,
+        rawPreview: rawContent.substring(0, 300),
+      },
+    }), { headers });
   }
 
-  // 중복 제거 + 정렬
+  // ── V1 하위 호환: { blocks: [...] } ──
+  const { blocks } = body;
+  if (!blocks || !Array.isArray(blocks) || blocks.length === 0) {
+    return new Response(JSON.stringify({ error: "text/version or blocks required" }), { status: 400, headers });
+  }
+  const fullText = blocks.map(b => b.text).join('\n');
+  const { words } = preprocessForV2(fullText);
+  const wordChunks = chunkWords(words);
+
+  let allBreaksAfter = [];
+  for (const chunk of wordChunks) {
+    try {
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.OPENAI_API_KEY}` },
+        body: JSON.stringify({
+          model: "gpt-5.4-mini",
+          messages: [{ role: "system", content: SUBTITLE_FORMAT_PROMPT }, { role: "user", content: chunk.numbered }],
+          temperature: 0.1, max_completion_tokens: 2000, response_format: { type: "json_object" },
+        }),
+      });
+      if (resp.ok) {
+        const d = await resp.json();
+        const raw = d.choices?.[0]?.message?.content || "";
+        try {
+          const p = JSON.parse(raw.substring(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+          if (Array.isArray(p.breaks_after)) allBreaksAfter.push(...p.breaks_after.filter(n => typeof n === 'number' && n >= 1 && n <= words.length));
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
   allBreaksAfter = [...new Set(allBreaksAfter)].sort((a, b) => a - b);
-
-  // 모델이 아무 break도 안 줬으면 fallback
   if (allBreaksAfter.length === 0) {
-    let charCount = 0;
-    for (let i = 0; i < words.length - 1; i++) {
-      charCount += words[i].length + 1;
-      if (charCount >= 20) { allBreaksAfter.push(i + 1); charCount = 0; }
-    }
+    let cc = 0;
+    for (let i = 0; i < words.length - 1; i++) { cc += words[i].length + 1; if (cc >= 20) { allBreaksAfter.push(i + 1); cc = 0; } }
   }
-
-  // ── 후처리 ──
   const finalText = postProcessSubtitleV2(words, allBreaksAfter);
-
-  const _debug = {
-    version: "v2.2",
-    inputLength: fullText.length,
-    wordCount: words.length,
-    chunkCount: wordChunks.length,
-    breaksCount: allBreaksAfter.length,
-    outputLength: finalText.length,
-    breaksAfter: allBreaksAfter,
-    chunks: chunkDebug,
-  };
-
-  return new Response(JSON.stringify({
-    success: true,
-    formatted: finalText,
-    _debug,
-  }), { headers });
+  return new Response(JSON.stringify({ success: true, formatted: finalText, blocks: [{ index: 0, text: finalText }] }), { headers });
 }
 
 // ═══════════════════════════════════════
