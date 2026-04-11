@@ -1269,16 +1269,24 @@ async function resplitLongLines(lines, env) {
     }
     resplitCount++;
     try {
-      const r = await callOpenAI(SUBTITLE_FORMAT_PROMPT_V3, line, env, {
-        temperature: 0.1, max_tokens: 1000, model: "gpt-5.4-mini", useJsonFormat: false,
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.OPENAI_API_KEY}` },
+        body: JSON.stringify({
+          model: "gpt-5.4-mini",
+          messages: [
+            { role: "system", content: SUBTITLE_FORMAT_PROMPT_V3 },
+            { role: "user", content: line },
+          ],
+          temperature: 0.1,
+          max_completion_tokens: 1000,
+        }),
       });
-      if (r.content && typeof r.content === 'string') {
-        const newLines = r.content.split('\n').filter(l => l.trim());
+      if (resp.ok) {
+        const d = await resp.json();
+        const text = (d.choices?.[0]?.message?.content || "").trim();
+        const newLines = text.split('\n').filter(l => l.trim());
         if (newLines.length > 1) { result.push(...newLines); continue; }
-      } else if (typeof r.content === 'object') {
-        // callOpenAI가 JSON 파싱한 경우 — raw 텍스트 필요
-        result.push(line);
-        continue;
       }
     } catch (e) { /* 실패 시 원본 유지 */ }
     result.push(line);
@@ -1346,21 +1354,40 @@ async function handleSubtitleFormat(body, env, headers) {
   if (body.version === "v3" && body.text) {
     const inputText = body.text;
 
-    const result = await callOpenAI(SUBTITLE_FORMAT_PROMPT_V3, inputText, env, {
-      temperature: 0.1, max_tokens: 4000, model: "gpt-5.4-mini", useJsonFormat: false,
-    });
-
-    if (result.error) {
-      return new Response(JSON.stringify({ error: result.error, _debug: { version: "v3", inputLength: inputText.length } }), { status: result.status || 500, headers });
+    // 직접 API 호출 (callOpenAI 미사용 — plain text 응답이므로 JSON 파싱 불필요)
+    let response;
+    try {
+      response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.OPENAI_API_KEY}` },
+        body: JSON.stringify({
+          model: "gpt-5.4-mini",
+          messages: [
+            { role: "system", content: SUBTITLE_FORMAT_PROMPT_V3 },
+            { role: "user", content: inputText },
+          ],
+          temperature: 0.1,
+          max_completion_tokens: 4000,
+        }),
+      });
+    } catch (netErr) {
+      return new Response(JSON.stringify({ error: `Network error: ${netErr.message}`, _debug: { version: "v3", inputLength: inputText.length } }), { status: 502, headers });
     }
 
-    // callOpenAI가 JSON 파싱을 시도하므로, content가 object일 수도 string일 수도 있음
-    let rawText = "";
-    if (typeof result.content === 'string') {
-      rawText = result.content;
-    } else if (result.content && typeof result.content === 'object') {
-      // JSON으로 파싱된 경우 — text 필드가 있으면 사용
-      rawText = result.content.text || result.content.formatted || JSON.stringify(result.content);
+    if (response.status === 429) {
+      return new Response(JSON.stringify({ error: "Rate limited", _debug: { version: "v3" } }), { status: 429, headers });
+    }
+    if (!response.ok) {
+      const errText = await response.text();
+      return new Response(JSON.stringify({ error: `OpenAI error ${response.status}`, _debug: { version: "v3", error: errText.substring(0, 300) } }), { status: response.status, headers });
+    }
+
+    const data = await response.json();
+    const rawText = (data.choices?.[0]?.message?.content || "").trim();
+    const finishReason = data.choices?.[0]?.finish_reason;
+
+    if (!rawText) {
+      return new Response(JSON.stringify({ error: "Empty response", _debug: { version: "v3", finishReason } }), { status: 500, headers });
     }
 
     // 후처리
@@ -1391,7 +1418,7 @@ async function handleSubtitleFormat(body, env, headers) {
         ratio,
         truncated: ratio < 80,
         resplitCount: resplitResult.resplitCount,
-        finishReason: result.finish_reason,
+        finishReason,
       },
     }), { headers });
   }

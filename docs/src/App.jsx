@@ -2976,9 +2976,20 @@ export default function App() {
             // V3: 블록(화자 턴) 단위 처리, 500자 초과만 문장 끝에서 분할
             const MAX_BLOCK = 500;
             const SENT_END = /(?<=[.?!요죠다까])\s+/;
+            const isMetaBlock = (text) => {
+              const t = text.trim();
+              if (!t) return true;
+              if (/^\d{6}[_\s]/.test(t)) return true;
+              if (/^\d{4}\.\d{2}\.\d{2}/.test(t)) return true;
+              if (/^\d+분\s*\d+초/.test(t)) return true;
+              if (/^[-=─]{3,}$/.test(t)) return true;
+              if (/^={5,}/.test(t)) return true;
+              return false;
+            };
             const chunks = [];
             for (const blockText of allTexts) {
               if (!blockText.trim()) continue;
+              if (isMetaBlock(blockText)) continue;
               if (blockText.length <= MAX_BLOCK) {
                 chunks.push(blockText);
               } else {
