@@ -12,7 +12,6 @@ const DEFAULT_CONFIG = {
   fillers: ["이제","또","좀","뭐","그냥","약간","진짜","되게","막","이렇게","저렇게"],
   customTerms: {},
   chunkSize: 8000,
-  spellcheck: true,
 };
 
 function loadConfig() {
@@ -248,37 +247,6 @@ async function apiCorrect(chunkText, idx, total, analysis, context, cfg) {
     context_blocks: context, analysis, custom_fillers: cfg.fillers, custom_terms: cfg.customTerms,
   }, cfg);
   
-  return d.result;
-}
-
-// Step 1.5 — 맞춤법 교정
-async function apiSpellcheck(chunkText, idx, total, context, cfg) {
-  if (cfg.apiMode === "mock") {
-    await delay(300 + Math.random() * 300);
-    // Mock: 간단한 맞춤법 오류 시뮬레이션
-    const chunks = [];
-    const blockRe = /\[블록 (\d+)\]/g;
-    const matches = [...chunkText.matchAll(blockRe)];
-    matches.forEach((m, mi) => {
-      const bIdx = parseInt(m[1]);
-      const start = m.index;
-      const end = mi < matches.length - 1 ? matches[mi + 1].index : chunkText.length;
-      const bText = chunkText.substring(start, end);
-      const changes = [];
-      // 간단한 Mock 패턴
-      if (bText.includes("할수")) changes.push({ type: "spelling", subtype: "spacing", original: "할수", corrected: "할 수", reason: "의존명사 띄어쓰기" });
-      if (bText.includes("됬")) changes.push({ type: "spelling", subtype: "orthography", original: "됬", corrected: "됐", reason: "맞춤법" });
-      if (bText.includes("웬지")) changes.push({ type: "spelling", subtype: "orthography", original: "웬지", corrected: "왠지", reason: "맞춤법" });
-      if (changes.length > 0) chunks.push({ block_index: bIdx, changes });
-    });
-    return { chunks };
-  }
-
-  const d = await apiCall("spellcheck", {
-    chunk_text: chunkText, chunk_index: idx, total_chunks: total,
-    context_blocks: context,
-  }, cfg);
-
   return d.result;
 }
 
@@ -1535,7 +1503,6 @@ function SettingsModal({ config, onSave, onClose }) {
   const [f, setF] = useState(config.fillers.join(", "));
   const [t, setT] = useState(Object.entries(config.customTerms).map(([k,v])=>`${k}=${v.join(",")}`).join("\n"));
   const [cs, setCs] = useState(config.chunkSize);
-  const [sp, setSp] = useState(config.spellcheck !== false);
   // 단어장 state — 삭제/수정 즉시 반영
   const [dictList, setDictList] = useState(() => {
     const d = loadDictionary();
@@ -1548,7 +1515,7 @@ function SettingsModal({ config, onSave, onClose }) {
     const ct = {};
     t.split("\n").filter(Boolean).forEach(l => { const [c,w] = l.split("="); if(c&&w) ct[c.trim()] = w.split(",").map(s=>s.trim()); });
     onSave({...config, apiMode:m, workerUrl:u.replace(/\/+$/,""),
-      fillers:f.split(",").map(s=>s.trim()).filter(Boolean), customTerms:ct, chunkSize:parseInt(cs)||15000, spellcheck:sp});
+      fillers:f.split(",").map(s=>s.trim()).filter(Boolean), customTerms:ct, chunkSize:parseInt(cs)||15000});
   };
   const iS = {width:"100%",padding:"8px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
     background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,fontFamily:FN,outline:"none"};
@@ -1584,16 +1551,6 @@ function SettingsModal({ config, onSave, onClose }) {
       <div style={{marginBottom:20}}>
         <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>청크 크기 (자)</label>
         <input type="number" value={cs} onChange={e=>setCs(e.target.value)} style={{...iS,width:120}}/>
-      </div>
-      <div style={{marginBottom:20}}>
-        <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
-          <input type="checkbox" checked={sp} onChange={e=>setSp(e.target.checked)}
-            style={{width:16,height:16,accentColor:C.ac,cursor:"pointer"}}/>
-          Step 1.5 맞춤법 교정
-        </label>
-        <div style={{fontSize:11,color:C.txD,marginTop:4,paddingLeft:24}}>
-          띄어쓰기 · 맞춤법 · 조사 · 구두점 교정 (문장 구조 변경 없음)
-        </div>
       </div>
       <div style={{marginBottom:20,padding:14,background:"rgba(0,0,0,0.2)",borderRadius:10,border:`1px solid ${C.bd}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -2188,7 +2145,7 @@ export default function App() {
     finally { setBusy(false); }
   },[cfg]);
 
-  // Run correction with user-approved terms + Step 1.5 맞춤법
+  // Run correction with user-approved terms (v4 통합 교정)
   const handleCorrectStart = useCallback(async(approvedTerms)=>{
     setTermReview(false);
     // 확정된 용어를 단어장에 자동 저장 (correct 값만)
@@ -2201,34 +2158,17 @@ export default function App() {
     setAnal(approvedAnal);
     setBusy(true); setErr(null);
     try {
-      // ── 1단계: 필러 + 용어 교정 ──
+      // ── 통합 교정: 필러 + 용어 + 맞춤법 + 구어체 (단일 루프) ──
       const chs = splitChunks(blocks, cfg.chunkSize); const ad = [];
-      const totalSteps = cfg.spellcheck ? 2 : 1;
       for(let i=0;i<chs.length;i++){
-        const pct = totalSteps === 2
-          ? 3 + Math.round(i/chs.length * 45)
-          : 5 + Math.round(i/chs.length * 90);
-        setProg({p:pct, l:`1단계: 청크 ${i+1}/${chs.length} 교정 중 (필러+용어)...`});
+        const pct = 5 + Math.round(i/chs.length * 90);
+        setProg({p:pct, l:`1차 교정: 청크 ${i+1}/${chs.length} 교정 중...`});
         const res = await apiCorrect(chunkToText(chs[i]),i,chs.length,approvedAnal,chunkCtx(chs[i]),cfg);
         if(res.chunks) ad.push(...res.chunks);
         if(cfg.apiMode==="live"&&i<chs.length-1) await delay(1000);
       }
 
-      // ── Step 1.5: 맞춤법 교정 ──
-      if (cfg.spellcheck) {
-        setProg({p:50, l:"Step 1.5: 맞춤법 교정 준비 중..."});
-        if(cfg.apiMode==="live") await delay(3000); // Rate limit 보호
-
-        for(let i=0;i<chs.length;i++){
-          const pct = 52 + Math.round(i/chs.length * 43);
-          setProg({p:pct, l:`Step 1.5: 청크 ${i+1}/${chs.length} 맞춤법 교정 중...`});
-          const res = await apiSpellcheck(chunkToText(chs[i]),i,chs.length,chunkCtx(chs[i]),cfg);
-          if(res.chunks) ad.push(...res.chunks);
-          if(cfg.apiMode==="live"&&i<chs.length-1) await delay(1000);
-        }
-      }
-
-      setDiffs(ad); setProg({p:100,l: cfg.spellcheck ? "✅ 1차 교정 + 맞춤법 완료" : "✅ 1차 교정 완료"});
+      setDiffs(ad); setProg({p:100,l:"✅ 1차 교정 완료"});
       // 자동 KV 저장 (1차 교정 완료)
       autoSaveToKV({ diffs: ad });
     } catch(e) { setErr(e.message); setProg({p:0,l:""}); }
