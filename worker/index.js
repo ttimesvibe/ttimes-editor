@@ -1267,21 +1267,16 @@ Input text contains [화자명] markers at the start of each speaker turn.
 <process>
 Follow this exact sequence for every input:
 
-STEP 1 — SEGMENT THE INPUT
-- Divide the full input into chunks of ~5–8 sentences.
-- Process each chunk independently with full attention to all rules.
-- Later chunks require the SAME care as the first. Do NOT rush.
+STEP 1 — FOR THE INPUT:
 
-STEP 2 — FOR EACH CHUNK:
-
-  2a. Mark clause boundaries
+  1a. Mark clause boundaries
   Clause-ending suffixes (break AFTER these):
   ~하고, ~해서, ~인데, ~지만, ~니까, ~있고, ~거든요, ~잖아요, ~됐고, ~보니까, ~계세요
 
   Conjunctions (break BEFORE these — they start a new line):
   그래서, 그리고, 하지만, 결국, 심지어, 특히, 마찬가지로
 
-  2b. Identify semantic chunks within each clause
+  1b. Identify semantic chunks within each clause
   A semantic chunk is a group of words forming ONE idea:
   - [Subject/Topic + Particle]: 사용자의 역량이
   - [Modifier clause + Head noun]: 돌아가고 있는 곳들이
@@ -1289,14 +1284,14 @@ STEP 2 — FOR EACH CHUNK:
   - [Object + Predicate]: 토큰을 생산할
   - [Main verb + Auxiliary verb + Ending]: 나오고 있으니까
 
-  2c. Place line breaks BETWEEN semantic chunks, never inside them.
+  1c. Place line breaks BETWEEN semantic chunks, never inside them.
   Choose the break point closest to the 15–25 character target.
 
-  2d. VALIDATE every line in this chunk.
-  Count characters. If any line is < 15 or > 25, fix it NOW before proceeding.
+  1d. VALIDATE every line.
+  Count characters. If any line is < 15 or > 25, fix it NOW before outputting.
 
-STEP 3 — FINAL VALIDATION
-After all chunks are processed, do a final character-count check on the entire output.
+STEP 2 — FINAL VALIDATION
+Do a final character-count check on the entire output.
 </process>
 
 <never_split>
@@ -1387,7 +1382,7 @@ Line 6: "되려고 하고 있고" (10ch) — [Main verb + Auxiliary verb + Endin
 </quote_rules>
 
 <quality_reminder>
-Read this before processing EACH new segment:
+Read this before processing EACH chunk:
 - Line 300 must be the same quality as line 1.
 - Every line: 15–25 characters. Count them.
 - Never split semantic chunks. Break only BETWEEN meaning units.
