@@ -2909,8 +2909,11 @@ export default function App() {
           try {
             const allTexts = blocks.map(b => {
               const idx = b.index;
-              if (scriptEdits[idx] !== undefined) return scriptEdits[idx];
-              return getCorrectedText(b.text, dm[idx]);
+              const text = scriptEdits[idx] !== undefined
+                ? scriptEdits[idx]
+                : getCorrectedText(b.text, dm[idx]);
+              const speaker = b.speaker && b.speaker !== "—" ? `[${b.speaker}]` : "";
+              return speaker ? `${speaker}\n${text}` : text;
             });
 
             // PATCH-008: 600~1000자 범위 + 화자 턴 경계에서 끊기

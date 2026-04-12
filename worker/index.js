@@ -1294,6 +1294,13 @@ Breaking inside ANY of these patterns is a critical error.
 | Orphaned single word on a line | (never allowed)         |                          |
 </never_split>
 
+<speaker_markers>
+Input text may contain [화자명] markers at the start of each speaker turn.
+- ALWAYS start a new line after each [화자명] marker.
+- NEVER merge text from different speakers into one line.
+- Remove the [화자명] markers from your output — they are only for your reference.
+</speaker_markers>
+
 <output_format>
 Output ONLY the text with line breaks inserted. Nothing else.
 Do NOT wrap in quotes, code blocks, or JSON.
