@@ -346,7 +346,9 @@ export function ModifyTab({ sessionId, config, onSave, currentTab, initialData }
     if (!sessionId || !base || loaded) return;
     (async () => {
       try {
-        const r = await fetch(`${base}/load/${sessionId}/modify`);
+        const _tk = localStorage.getItem("ttimes_token");
+        const _ah = _tk ? { "Authorization": `Bearer ${_tk}` } : {};
+        const r = await fetch(`${base}/load/${sessionId}/modify`, { headers: _ah });
         if (!r.ok) { setLoaded(true); return; }
         const d = await r.json();
         {
@@ -361,7 +363,7 @@ export function ModifyTab({ sessionId, config, onSave, currentTab, initialData }
           const imgCards = (data.cards || []).filter(c => c.hasImage);
           for (const c of imgCards) {
             try {
-              const ir = await fetch(`${base}/image/${sessionId}/${c.id}`);
+              const ir = await fetch(`${base}/image/${sessionId}/${c.id}`, { headers: _ah });
               if (ir.ok) {
                 const id2 = await ir.json();
                 if (id2.imageData) setImages(prev => ({ ...prev, [c.id]: id2.imageData }));
@@ -428,9 +430,10 @@ export function ModifyTab({ sessionId, config, onSave, currentTab, initialData }
     // 이미지 업로드
     if (card.imageData && sessionId && base) {
       try {
+        const _tk2 = localStorage.getItem("ttimes_token");
         await fetch(`${base}/save-image`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(_tk2 ? { "Authorization": `Bearer ${_tk2}` } : {}) },
           body: JSON.stringify({ sessionId, cardId: card.id, imageData: card.imageData }),
         });
         setImages(prev => ({ ...prev, [card.id]: card.imageData }));
@@ -455,7 +458,7 @@ export function ModifyTab({ sessionId, config, onSave, currentTab, initialData }
     const newCards = cards.filter(c => c.id !== cardId);
     setCards(newCards);
     if (card?.hasImage && sessionId && base) {
-      try { await fetch(`${base}/image/${sessionId}/${cardId}`, { method: "DELETE" }); } catch {}
+      try { const _tk3 = localStorage.getItem("ttimes_token"); await fetch(`${base}/image/${sessionId}/${cardId}`, { method: "DELETE", headers: _tk3 ? { "Authorization": `Bearer ${_tk3}` } : {} }); } catch {}
       setImages(prev => { const n = { ...prev }; delete n[cardId]; return n; });
     }
     saveNow(newCards);

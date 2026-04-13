@@ -498,7 +498,8 @@ export function VisualTab({ script, blocks, sessionId, config, onSave, currentTa
     (async () => {
       try {
         const base = config.workerUrl;
-        const r = await fetch(`${base}/load/${sessionId}/visual`);
+        const _tk = localStorage.getItem("ttimes_token");
+        const r = await fetch(`${base}/load/${sessionId}/visual`, { headers: _tk ? { "Authorization": `Bearer ${_tk}` } : {} });
         if (!r.ok) return;
         const data = await r.json();
         const d = data?.data || data; // data.data (레거시) 또는 data 직접

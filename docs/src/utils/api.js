@@ -4,6 +4,20 @@
 
 export function delay(ms){return new Promise(r=>setTimeout(r,ms))}
 
+function authHeaders() {
+  const token = localStorage.getItem("ttimes_token");
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
+function handle401(r) {
+  if (r.status === 401) {
+    localStorage.removeItem("ttimes_token");
+    localStorage.removeItem("ttimes_user");
+    window.location.reload();
+    throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
+  }
+}
+
 export async function apiCall(endpoint, body, config, retries = 4) {
   if (config.apiMode === "mock") return null;
   const url = `${config.workerUrl}/${endpoint}`;
@@ -13,7 +27,7 @@ export async function apiCall(endpoint, body, config, retries = 4) {
     try {
       r = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(body),
       });
     } catch (netErr) {
@@ -42,6 +56,8 @@ export async function apiCall(endpoint, body, config, retries = 4) {
       throw new Error(`Worker 서버 오류 (${endpoint}, HTTP ${r.status}). 입력이 너무 크거나 Worker 타임아웃일 수 있습니다.`);
     }
 
+    handle401(r);
+
     if (d.success) return d;
 
     if (r.status === 429 || d.status === 429 || (d.error && d.error.includes("Rate limited"))) {
@@ -67,9 +83,10 @@ export async function apiSaveSession(sessionData, config) {
   if (!base) throw new Error("Worker URL이 설정되지 않았습니다.");
   const r = await fetch(`${base}/save`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(sessionData),
   });
+  handle401(r);
   const d = await r.json();
   if (!d.success) throw new Error(d.error || "저장 실패");
   return d.id;
@@ -78,7 +95,8 @@ export async function apiSaveSession(sessionData, config) {
 export async function apiLoadSession(id, config) {
   const base = getWorkerBase(config);
   if (!base) throw new Error("Worker URL이 설정되지 않았습니다.");
-  const r = await fetch(`${base}/load/${id}`);
+  const r = await fetch(`${base}/load/${id}`, { headers: authHeaders() });
+  handle401(r);
   if (!r.ok) { const d = await r.json(); throw new Error(d.error || "불러오기 실패"); }
   return r.json();
 }
@@ -181,9 +199,10 @@ export async function apiSaveTab(sessionId, tab, data, config, fn) {
   if (!base) throw new Error("Worker URL이 설정되지 않았습니다.");
   const r = await fetch(`${base}/save`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ id: sessionId, tab, data, fn }),
   });
+  handle401(r);
   const d = await r.json();
   if (!d.success) throw new Error(d.error || "저장 실패");
   return d.id;
@@ -192,7 +211,8 @@ export async function apiSaveTab(sessionId, tab, data, config, fn) {
 export async function apiLoadMeta(sessionId, config) {
   const base = config.workerUrl;
   if (!base) throw new Error("Worker URL이 설정되지 않았습니다.");
-  const r = await fetch(`${base}/load/${sessionId}`);
+  const r = await fetch(`${base}/load/${sessionId}`, { headers: authHeaders() });
+  handle401(r);
   if (!r.ok) throw new Error("메타 로드 실패");
   return r.json();
 }
@@ -200,7 +220,8 @@ export async function apiLoadMeta(sessionId, config) {
 export async function apiLoadTab(sessionId, tab, config) {
   const base = config.workerUrl;
   if (!base) throw new Error("Worker URL이 설정되지 않았습니다.");
-  const r = await fetch(`${base}/load/${sessionId}/${tab}`);
+  const r = await fetch(`${base}/load/${sessionId}/${tab}`, { headers: authHeaders() });
+  handle401(r);
   if (!r.ok) return null;
   return r.json();
 }

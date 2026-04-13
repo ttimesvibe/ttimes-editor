@@ -17,6 +17,7 @@ import { GuideCard } from "./components/GuideCard.jsx";
 import { ShareModal, SessionListModal, SettingsModal } from "./components/Modals.jsx";
 import { EditorialSummaryPanel } from "./components/EditorialSummaryPanel.jsx";
 import { TermReviewScreen } from "./components/TermReviewScreen.jsx";
+import { LoginScreen } from "./components/LoginScreen.jsx";
 
 // ── Tabs ──
 import { HighlightTab } from "./tabs/HighlightTab.jsx";
@@ -29,6 +30,62 @@ import { ModifyTab } from "./tabs/ModifyTab.jsx";
 // ═══════════════════════════════════════════════
 
 export default function App() {
+  // ── 인증 상태 ──
+  const [authState, setAuthState] = useState("checking"); // checking | login | authenticated
+  const [authUser, setAuthUser] = useState(null);
+
+  // 마운트 시 토큰 확인
+  useEffect(() => {
+    const token = localStorage.getItem("ttimes_token");
+    if (!token) {
+      setAuthState("login");
+      return;
+    }
+    try {
+      // base64url → UTF-8 디코딩 (한글 이름 지원)
+      const payloadB64 = token.split(".")[1];
+      const payloadBytes = Uint8Array.from(atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+      const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
+      if (payload.exp < Date.now() / 1000) {
+        localStorage.removeItem("ttimes_token");
+        localStorage.removeItem("ttimes_user");
+        setAuthState("login");
+        return;
+      }
+      setAuthUser({ email: payload.sub, name: payload.name, role: payload.role });
+      setAuthState("authenticated");
+    } catch {
+      localStorage.removeItem("ttimes_token");
+      setAuthState("login");
+    }
+  }, []);
+
+  const handleAuthLogin = useCallback((token, user) => {
+    localStorage.setItem("ttimes_token", token);
+    localStorage.setItem("ttimes_user", JSON.stringify(user));
+    setAuthUser(user);
+    setAuthState("authenticated");
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem("ttimes_token");
+    localStorage.removeItem("ttimes_user");
+    setAuthUser(null);
+    setAuthState("login");
+  }, []);
+
+  // 인증 게이트
+  if (authState === "checking") {
+    return <div style={{height:"100vh",background:"#0F0F23",display:"flex",alignItems:"center",justifyContent:"center",color:"#9CA3AF",fontFamily:"'Pretendard Variable', sans-serif"}}>로딩 중...</div>;
+  }
+  if (authState === "login") {
+    return <LoginScreen onLogin={handleAuthLogin} />;
+  }
+
+  return <AuthenticatedApp authUser={authUser} onLogout={handleLogout} />;
+}
+
+function AuthenticatedApp({ authUser, onLogout }) {
   const [cfg, setCfg] = useState(loadConfig);
   const [theme, setTheme] = useState(_savedTheme);
   const toggleTheme = useCallback(() => {
@@ -225,8 +282,9 @@ export default function App() {
         const session = { blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, savedAt: new Date().toISOString() };
         const curId = sessionIdRef.current;
         const id = curId || (Date.now().toString(36) + Math.random().toString(36).substring(2, 8));
+        const _tk = localStorage.getItem("ttimes_token");
         const res = await fetch(`${cfg.workerUrl}/autosave`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json", ...(_tk ? { "Authorization": `Bearer ${_tk}` } : {}) },
           body: JSON.stringify({ id, ...session }),
         });
         const data = await res.json();
@@ -832,6 +890,9 @@ export default function App() {
             background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>{theme==="dark"?"☀️":"🌙"}</button>
         {!readOnly && <button onClick={()=>setShowSet(true)} style={{padding:"5px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
           background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>⚙️</button>}
+        <span style={{fontSize:11,color:C.txM,marginLeft:4}}>{authUser?.name||authUser?.email}</span>
+        <button onClick={onLogout} style={{padding:"4px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
+          background:"transparent",color:C.txD,fontSize:11,cursor:"pointer",fontFamily:FN}}>로그아웃</button>
       </div>
     </header>
 

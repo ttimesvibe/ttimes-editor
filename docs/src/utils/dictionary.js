@@ -15,7 +15,10 @@ export function saveDictionary(terms) {
 export async function syncDictionaryFromServer(config) {
   if (config.apiMode === "mock" || !config.workerUrl) return loadDictionary();
   try {
-    const r = await fetch(`${config.workerUrl}/dict`);
+    const token = localStorage.getItem("ttimes_token");
+    const r = await fetch(`${config.workerUrl}/dict`, {
+      headers: token ? { "Authorization": `Bearer ${token}` } : {},
+    });
     const d = await r.json();
     if (d.success && Array.isArray(d.dict)) {
       // 오염된 항목 자동 정리: 문장 조각이 아닌 진짜 용어만 유지
@@ -52,9 +55,10 @@ export async function saveDictionaryToServer(terms, config) {
   saveDictionary(terms); // 로컬 캐시 즉시 반영
   if (config.apiMode === "mock" || !config.workerUrl) return;
   try {
+    const token = localStorage.getItem("ttimes_token");
     await fetch(`${config.workerUrl}/dict`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) },
       body: JSON.stringify({ dict: terms }),
     });
   } catch (e) { console.warn("단어장 서버 저장 실패:", e.message); }

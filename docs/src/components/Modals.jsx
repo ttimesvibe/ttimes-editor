@@ -47,7 +47,8 @@ export function SessionListModal({ config, onLoad, onClose }) {
 
   useEffect(() => {
     if (!config.workerUrl || config.apiMode === "mock") { setLoading(false); return; }
-    fetch(`${config.workerUrl}/sessions`)
+    const _tk = localStorage.getItem("ttimes_token");
+    fetch(`${config.workerUrl}/sessions`, { headers: _tk ? { "Authorization": `Bearer ${_tk}` } : {} })
       .then(r => r.json())
       .then(d => { if (d.success) setSessions(d.sessions || []); })
       .catch(() => {})
@@ -58,8 +59,9 @@ export function SessionListModal({ config, onLoad, onClose }) {
     if (!confirm("이 세션을 삭제할까요?")) return;
     setDeleting(id);
     try {
+      const _tk = localStorage.getItem("ttimes_token");
       await fetch(`${config.workerUrl}/sessions/delete`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json", ...(_tk ? { "Authorization": `Bearer ${_tk}` } : {}) },
         body: JSON.stringify({ id }),
       });
       setSessions(prev => prev.filter(s => s.id !== id));
