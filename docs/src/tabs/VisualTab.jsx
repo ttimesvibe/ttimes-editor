@@ -808,20 +808,45 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
                 </div>
               </div>;
             })}
-            {/* 인라인: 사용 수동 자료 */}
+            {/* 인라인: 사용 수동 자료 (형광펜 팔레트 포함) */}
             {usedResources.map(r => {
+              const rKey=`res-${r.id}`;
+              const rMarker=visualMarkers[rKey]; const rMarkerColor=rMarker?.color;
+              const rMc=rMarkerColor?MARKER_COLORS[rMarkerColor]:null;
+              const rActiveMatch=vMatchMode?.key===rKey;
               return <div key={`inline-res-${r.id}`} style={{margin:"2px 16px 4px",padding:"10px 14px",borderRadius:8,
-                border:"1px solid rgba(249,115,22,0.4)",background:"rgba(249,115,22,0.06)",display:"flex",alignItems:"flex-start",gap:8}}>
-                <span style={{fontSize:13,color:"#F97316",fontWeight:700,flexShrink:0}}>📎</span>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"#F97316",lineHeight:1.6}}>{r.text}</div>
-                  {r.source && <div style={{fontSize:12,color:C.txM,lineHeight:1.5,marginTop:2}}>출처: {r.source}</div>}
+                border:`1px solid ${rMc?rMc.border:"rgba(249,115,22,0.4)"}`,
+                background:rMc?rMc.bg.replace("0.3","0.08"):"rgba(249,115,22,0.06)",
+                boxShadow:rActiveMatch?`0 0 0 2px ${rMc?.border||C.ac}`:"none"}}>
+                <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                  <span style={{fontSize:13,color:"#F97316",fontWeight:700,flexShrink:0}}>📎</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:600,color:"#F97316",lineHeight:1.6}}>{r.text}</div>
+                    {r.source && <div style={{fontSize:12,color:C.txM,lineHeight:1.5,marginTop:2}}>출처: {r.source}</div>}
+                  </div>
+                </div>
+                {/* 형광펜 팔레트 */}
+                <div style={{display:"flex",alignItems:"center",gap:3,marginTop:6,paddingTop:6,borderTop:`1px solid ${C.bd}22`}}>
+                  <span style={{fontSize:9,color:C.txD,marginRight:2}}>🖍</span>
+                  {Object.entries(MARKER_COLORS).filter(([,cv])=>!cv._hidden).map(([ck,cv])=>
+                    <button key={ck} onClick={e=>{e.stopPropagation();
+                      if(rActiveMatch&&vMatchMode.color===ck) setVMatchMode(null);
+                      else setVMatchMode({key:rKey,color:ck,blockIdx:r.block_index});}}
+                      title={`${cv.label} 형광펜${rMarkerColor===ck?" (선택됨)":""}`}
+                      style={{width:16,height:16,borderRadius:3,cursor:"pointer",transition:"all 0.12s",
+                        border:`2px solid ${rActiveMatch&&vMatchMode?.color===ck?"#fff":rMarkerColor===ck?cv.border:"transparent"}`,
+                        background:cv.bg.replace("0.3","0.6"),
+                        boxShadow:rActiveMatch&&vMatchMode?.color===ck?"0 0 4px rgba(255,255,255,0.5)":"none"}}/>)}
+                  {rMarker&&<button onClick={e=>{e.stopPropagation();handleMarkerClear(rKey);setVMatchMode(null)}}
+                    title="형광펜 지우기"
+                    style={{fontSize:9,lineHeight:1,padding:"2px 4px",border:`1px solid ${C.bd}`,borderRadius:3,
+                      background:"rgba(255,255,255,0.06)",color:C.txD,cursor:"pointer"}}>✕</button>}
                 </div>
               </div>;
             })}
-            {/* 자료 추가 버튼 */}
+            {/* 자료 추가 버튼 (오른쪽 정렬) */}
             {isActive && resAddAt !== b.index && (
-              <div style={{padding:"4px 16px 6px",display:"flex",gap:6}}>
+              <div style={{padding:"4px 16px 6px",display:"flex",justifyContent:"flex-end",gap:6}}>
                 <button onClick={e=>{e.stopPropagation();setResAddAt(b.index);setResForm({text:"",type:"image",source:""});}}
                   style={{fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:6,
                     border:`1px dashed #F97316`,background:"rgba(249,115,22,0.08)",
