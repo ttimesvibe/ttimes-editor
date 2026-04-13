@@ -458,7 +458,7 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
   const [visualMarkers, setVisualMarkers] = useState({});
   const [vMatchMode, setVMatchMode] = useState(null); // { key, color, blockIdx }
   const [resAddAt, setResAddAt] = useState(null);
-  const [resForm, setResForm] = useState({ text: "", type: "image" });
+  const [resForm, setResForm] = useState({ text: "", type: "image", source: "" });
   const [resEditing, setResEditing] = useState(null); // { id, text, type }
 
   const lRef = useRef(null);
@@ -635,7 +635,7 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
   const RES_TYPES = [
     { value: "image", label: "🖼 이미지", color: "#3B82F6" },
     { value: "video", label: "🎬 영상", color: "#8B5CF6" },
-    { value: "data", label: "📊 데이터", color: "#22C55E" },
+    { value: "data", label: "📊 그래픽", color: "#22C55E" },
     { value: "etc", label: "📌 기타", color: "#F59E0B" },
   ];
 
@@ -648,13 +648,14 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
       block_range: [resAddAt, resAddAt],
       speaker: block?.speaker || "—",
       text: resForm.text.trim(),
+      source: resForm.source.trim() || "",
       type: resForm.type,
       _manual: true,
     };
     setManualResources(prev => [...prev, newRes]);
     setVerdicts(prev => ({ ...prev, [`res-${newRes.id}`]: "use" }));
     setResAddAt(null);
-    setResForm({ text: "", type: "image" });
+    setResForm({ text: "", type: "image", source: "" });
   }, [resAddAt, resForm, blocks]);
 
   const handleDeleteResource = useCallback((id) => {
@@ -665,7 +666,7 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
 
   const handleSaveResource = useCallback(() => {
     if (!resEditing || !resEditing.text.trim()) return;
-    setManualResources(prev => prev.map(r => r.id === resEditing.id ? { ...r, text: resEditing.text.trim(), type: resEditing.type } : r));
+    setManualResources(prev => prev.map(r => r.id === resEditing.id ? { ...r, text: resEditing.text.trim(), source: resEditing.source?.trim() || "", type: resEditing.type } : r));
     setResEditing(null);
   }, [resEditing]);
 
@@ -814,14 +815,14 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
                 <span style={{fontSize:13,color:"#F97316",fontWeight:700,flexShrink:0}}>📎</span>
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:600,color:"#F97316",lineHeight:1.6}}>{r.text}</div>
-                  <span style={{fontSize:9,padding:"1px 4px",borderRadius:3,background:"rgba(249,115,22,0.15)",color:"#F97316",fontWeight:600}}>수동 추가</span>
+                  {r.source && <div style={{fontSize:12,color:C.txM,lineHeight:1.5,marginTop:2}}>출처: {r.source}</div>}
                 </div>
               </div>;
             })}
             {/* 자료 추가 버튼 */}
             {isActive && resAddAt !== b.index && (
               <div style={{padding:"4px 16px 6px",display:"flex",gap:6}}>
-                <button onClick={e=>{e.stopPropagation();setResAddAt(b.index);setResForm({text:"",type:"image"});}}
+                <button onClick={e=>{e.stopPropagation();setResAddAt(b.index);setResForm({text:"",type:"image",source:""});}}
                   style={{fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:6,
                     border:`1px dashed #F97316`,background:"rgba(249,115,22,0.08)",
                     color:"#F97316",cursor:"pointer"}}>📎 자료 추가</button>
@@ -840,12 +841,16 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
                         color:resForm.type===rt.value?rt.color:C.txD}}>{rt.label}</button>)}
                 </div>
                 <textarea value={resForm.text} onChange={e=>setResForm(f=>({...f,text:e.target.value}))}
-                  placeholder="자료 내용/메모 (예: 관련 기사 캡쳐, 매출 데이터 차트 등)"
+                  placeholder="자료 내용/메모 (예: 관련 기사 캡쳐, 매출 그래픽 등)"
                   rows={2} autoFocus
                   style={{width:"100%",padding:"6px 8px",borderRadius:6,border:`1px solid ${C.bd}`,
                     background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,fontFamily:FN,
-                    lineHeight:1.5,resize:"vertical",outline:"none"}}
-                  onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleAddResource();}if(e.key==="Escape")setResAddAt(null);}}/>
+                    lineHeight:1.5,resize:"vertical",outline:"none"}}/>
+                <input value={resForm.source} onChange={e=>setResForm(f=>({...f,source:e.target.value}))}
+                  placeholder="출처 (선택사항)"
+                  style={{width:"100%",padding:"6px 8px",marginTop:6,borderRadius:6,border:`1px solid ${C.bd}`,
+                    background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:12,fontFamily:FN,outline:"none"}}
+                  onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();handleAddResource();}if(e.key==="Escape")setResAddAt(null);}}/>
                 <div style={{display:"flex",gap:4,marginTop:6,justifyContent:"flex-end"}}>
                   <button onClick={()=>setResAddAt(null)}
                     style={{fontSize:11,padding:"3px 10px",borderRadius:4,border:`1px solid ${C.bd}`,
@@ -1013,11 +1018,10 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
                   boxShadow:rActiveMatch?`0 0 0 2px ${rMc?.border||C.ac}`:"none"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
                   <span style={{fontSize:13}}>{rt.label.split(" ")[0]}</span>
-                  <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,
-                    background:"rgba(249,115,22,0.15)",color:"#F97316"}}>수동 추가</span>
                   {!isEditing && <span style={{fontSize:11,fontWeight:600,color:C.tx,flex:1,textDecoration:rVd==="discard"?"line-through":"none"}}>{r.text}</span>}
                   <span style={{fontSize:9,padding:"1px 6px",borderRadius:3,background:`${rt.color}22`,color:rt.color,fontWeight:600}}>{rt.label}</span>
                 </div>
+                {!isEditing && r.source && <div style={{fontSize:11,color:C.txM,marginBottom:4}}>출처: {r.source}</div>}
                 {/* 인라인 편집 모드 */}
                 {isEditing && <div onClick={e=>e.stopPropagation()} style={{marginBottom:6}}>
                   <div style={{display:"flex",gap:4,marginBottom:6}}>
@@ -1032,8 +1036,12 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
                     rows={2} autoFocus
                     style={{width:"100%",padding:"6px 8px",borderRadius:6,border:`1px solid ${C.bd}`,
                       background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:12,fontFamily:FN,
-                      lineHeight:1.5,resize:"vertical",outline:"none"}}
-                    onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSaveResource();}if(e.key==="Escape")setResEditing(null);}}/>
+                      lineHeight:1.5,resize:"vertical",outline:"none"}}/>
+                  <input value={resEditing.source||""} onChange={e=>setResEditing(prev=>({...prev,source:e.target.value}))}
+                    placeholder="출처 (선택사항)"
+                    style={{width:"100%",padding:"6px 8px",marginTop:4,borderRadius:6,border:`1px solid ${C.bd}`,
+                      background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:11,fontFamily:FN,outline:"none"}}
+                    onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();handleSaveResource();}if(e.key==="Escape")setResEditing(null);}}/>
                   <div style={{display:"flex",gap:4,marginTop:4,justifyContent:"flex-end"}}>
                     <button onClick={()=>setResEditing(null)}
                       style={{fontSize:10,padding:"2px 8px",borderRadius:4,border:`1px solid ${C.bd}`,
@@ -1051,7 +1059,7 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
                         style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,cursor:"pointer",transition:"all 0.1s",
                           border:`1px solid ${rVd===o.k?o.c:"transparent"}`,background:rVd===o.k?o.bg:"rgba(255,255,255,0.04)",
                           color:rVd===o.k?o.c:C.txD}}>{o.l}</button>)}
-                    <button onClick={e=>{e.stopPropagation();setResEditing({id:r.id,text:r.text,type:r.type})}}
+                    <button onClick={e=>{e.stopPropagation();setResEditing({id:r.id,text:r.text,type:r.type,source:r.source||""})}}
                       title="수정"
                       style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,cursor:"pointer",
                         border:`1px solid ${C.bd}`,background:"transparent",color:C.txD}}>✏️</button>
