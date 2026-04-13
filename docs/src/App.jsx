@@ -270,12 +270,28 @@ export default function App() {
   }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, cfg, sessionId]);
 
   // ── 내보내기 ──
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
+    // exportCache에 빠진 탭 데이터가 있으면 KV에서 가져옴
+    let cache = { ...exportCache };
+    if (sessionId && cfg?.workerUrl) {
+      const missing = ["visual", "highlight", "setgen", "modify"].filter(t => !cache[t]);
+      if (missing.length > 0) {
+        const results = await Promise.allSettled(
+          missing.map(t => apiLoadTab(sessionId, t, cfg))
+        );
+        results.forEach((r, i) => {
+          if (r.status === "fulfilled" && r.value?.data) {
+            cache[missing[i]] = r.value.data;
+          }
+        });
+        setExportCache(cache);
+      }
+    }
     const data = {
       filename: fn,
       exportedAt: new Date().toISOString(),
       blocks, diffs, anal, hl, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData,
-      exportCache,
+      exportCache: cache,
     };
     const html = generateExportHTML(data);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -285,7 +301,7 @@ export default function App() {
     a.download = `${fn || "편집가이드"}_${new Date().toISOString().slice(0,10)}.html`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [fn, blocks, diffs, anal, hl, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, exportCache]);
+  }, [fn, blocks, diffs, anal, hl, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, exportCache, sessionId, cfg]);
 
   // 새 파일 시작
   const handleReset = useCallback(() => {

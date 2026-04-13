@@ -477,11 +477,14 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
         if (!r.ok) return;
         const data = await r.json();
         if (data && data.data) {
-          setVisualGuides(data.data.visualGuides || []);
-          setInsertCuts(data.data.insertCuts || []);
-          setVerdicts(data.data.verdicts || {});
-          setManualResources(data.data.manualResources || []);
-          setVisualMarkers(data.data.visualMarkers || {});
+          const d = data.data;
+          setVisualGuides(d.visualGuides || []);
+          setInsertCuts(d.insertCuts || []);
+          setVerdicts(d.verdicts || {});
+          setManualResources(d.manualResources || []);
+          setVisualMarkers(d.visualMarkers || {});
+          // 즉시 exportCache에 반영
+          onSave?.({ visualGuides: d.visualGuides || [], insertCuts: d.insertCuts || [], verdicts: d.verdicts || {}, manualResources: d.manualResources || [], visualMarkers: d.visualMarkers || {}, savedAt: new Date().toISOString() });
         }
         setLoaded(true);
       } catch { setLoaded(true); }

@@ -1811,10 +1811,7 @@ async function handleTermExplain(body, env, headers) {
   const { term, context } = body;
   if (!term) return new Response(JSON.stringify({ error: "term is required" }), { status: 400, headers });
 
-  const apiKey = env.GEMINI_API_KEY;
-  if (!apiKey) return new Response(JSON.stringify({ error: "GEMINI_API_KEY not configured. wrangler secret put GEMINI_API_KEY 로 설정하세요." }), { status: 500, headers });
-
-  const prompt = `당신은 영상 강조자막용 용어 설명 작성 전문가입니다.
+  const systemPrompt = `당신은 영상 강조자막용 용어 설명 작성 전문가입니다.
 주어진 용어에 대해 시청자가 바로 이해할 수 있는 1~2줄 짜리 설명을 생성하세요.
 
 ## 형식
@@ -1825,49 +1822,60 @@ async function handleTermExplain(body, env, headers) {
 - 전문 용어를 일상 언어로 번역
 - 일상 비유를 포함하면 이해도가 올라감
 - 구어체 금지, 간결체로 작성
-- 반드시 JSON만 출력: { "explanation": "생성된 설명" }
+- 반드시 JSON만 출력: { "explanation": "생성된 설명" }`;
 
-용어: ${term}${context ? `\n\n참고 맥락:\n${context}` : ""}`;
+  const userMessage = `용어: ${term}${context ? `\n\n참고 맥락:\n${context}` : ""}`;
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return new Response(JSON.stringify({ error: `Gemini API error ${response.status}: ${errText}` }), { status: 502, headers });
-    }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-    if (!text) {
-      return new Response(JSON.stringify({ error: "Gemini returned empty response" }), { status: 502, headers });
-    }
-
-    let jsonStr = text.trim();
-    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenceMatch) jsonStr = fenceMatch[1].trim();
-    const braceStart = jsonStr.indexOf('{');
-    const braceEnd = jsonStr.lastIndexOf('}');
-    if (braceStart !== -1 && braceEnd !== -1) jsonStr = jsonStr.substring(braceStart, braceEnd + 1);
-
+  // 1차: Gemini 시도
+  const geminiKey = env.GEMINI_API_KEY;
+  if (geminiKey) {
     try {
-      const result = JSON.parse(jsonStr);
-      return new Response(JSON.stringify({ success: true, result }), { headers });
-    } catch {
-      // JSON 파싱 실패 시 원문 텍스트를 그대로 explanation으로 반환
-      return new Response(JSON.stringify({ success: true, result: { explanation: text.trim() } }), { headers });
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: systemPrompt + "\n\n" + userMessage }] }],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+          }),
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (text) {
+          let jsonStr = text.trim();
+          const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (fenceMatch) jsonStr = fenceMatch[1].trim();
+          const braceStart = jsonStr.indexOf('{');
+          const braceEnd = jsonStr.lastIndexOf('}');
+          if (braceStart !== -1 && braceEnd !== -1) jsonStr = jsonStr.substring(braceStart, braceEnd + 1);
+          try {
+            const result = JSON.parse(jsonStr);
+            return new Response(JSON.stringify({ success: true, result }), { headers });
+          } catch {
+            return new Response(JSON.stringify({ success: true, result: { explanation: text.trim() } }), { headers });
+          }
+        }
+      }
+      // Gemini 실패 → OpenAI 폴백
+      console.warn("Gemini failed, falling back to OpenAI:", response.status);
+    } catch (e) {
+      console.warn("Gemini error, falling back to OpenAI:", e.message);
     }
+  }
+
+  // 2차: OpenAI 폴백
+  if (!env.OPENAI_API_KEY) {
+    return new Response(JSON.stringify({ error: "API key not configured (both Gemini and OpenAI unavailable)" }), { status: 500, headers });
+  }
+  try {
+    const result = await callOpenAI(systemPrompt, userMessage, env, { model: "gpt-5.4-mini", temperature: 0.3, max_tokens: 2000 });
+    if (result.error) {
+      return new Response(JSON.stringify({ error: `OpenAI fallback: ${result.error}` }), { status: result.status || 502, headers });
+    }
+    return new Response(JSON.stringify({ success: true, result: result.content }), { headers });
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
   }

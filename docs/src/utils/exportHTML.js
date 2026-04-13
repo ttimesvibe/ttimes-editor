@@ -13,34 +13,6 @@ export function generateExportHTML(data) {
     hour: "2-digit", minute: "2-digit",
   });
 
-  // ── 교정 텍스트 생성 (변경 부분 색상 표시) ──
-  function getCorrectedHTML(block) {
-    const blockDiffs = (diffs || []).filter(d => d.blockIndex === block.index);
-    const se = scriptEdits?.[block.index];
-    if (se !== undefined) return esc(se);
-    if (blockDiffs.length === 0) return esc(block.text);
-
-    let text = block.text;
-    const changes = blockDiffs.flatMap(d => d.changes || []);
-    // 변경 사항이 있지만 복잡한 인라인 표시 대신, 원문+교정 병렬 표시
-    const parts = [];
-    for (const c of changes) {
-      if (c.type === "filler_removal") {
-        parts.push(`<span style="background:#FEF3C7;text-decoration:line-through;color:#92400E" title="추임새 제거">${esc(c.original)}</span>`);
-      } else if (c.type === "term_correction") {
-        parts.push(`<span style="text-decoration:line-through;color:#999">${esc(c.original)}</span> → <span style="background:#D1FAE5;color:#065F46;font-weight:600" title="${esc(c.reason || "용어 교정")}">${esc(c.corrected)}</span>`);
-      } else if (c.corrected && c.original) {
-        parts.push(`<span style="text-decoration:line-through;color:#999">${esc(c.original)}</span> → <span style="background:#DBEAFE;color:#1E40AF">${esc(c.corrected)}</span>`);
-      }
-    }
-    const correctedText = changes.reduce((t, c) => {
-      if (c.original && c.corrected !== undefined) return t.replace(c.original, c.corrected);
-      if (c.type === "filler_removal" && c.original) return t.replace(c.original, "");
-      return t;
-    }, text);
-    return esc(correctedText);
-  }
-
   function esc(s) {
     if (!s) return "";
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -102,20 +74,7 @@ export function generateExportHTML(data) {
 
   // ═══ SECTIONS ═══
 
-  // 1. 교정 원고
-  let correctedSection = "";
-  if (blocks?.length > 0) {
-    const rows = blocks.map(b => {
-      const corrected = getCorrectedHTML(b);
-      return `<div class="block">
-        <div class="block-header"><span class="speaker">${esc(b.speaker)}</span> <span class="ts">${esc(b.timestamp)}</span></div>
-        <div class="block-text">${corrected}</div>
-      </div>`;
-    }).join("\n");
-    correctedSection = section("📝 교정된 원고 전문", `<p class="meta">${blocks.length}블록 · ${blocks.reduce((s, b) => s + b.text.length, 0).toLocaleString()}자</p>${rows}`, true);
-  }
-
-  // 2. 0차 원고 검토
+  // 1. 0차 원고 검토
   let reviewSection = "";
   if (reviewData) {
     const dur = reviewData.duration;
@@ -389,7 +348,6 @@ export function generateExportHTML(data) {
   <div class="header-meta">내보내기: ${date} · ttimes 편집 CMS</div>
   ${reviewSection}
   ${analSection}
-  ${correctedSection}
   ${guideSection}
   ${visualSection}
   ${modifySection}
