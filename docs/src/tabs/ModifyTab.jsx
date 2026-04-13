@@ -295,7 +295,7 @@ function ReviewCard({ card, onCheck, onDelete, onSeek, onEdit, images, currentTi
 // ═══════════════════════════════════════
 // ModifyTab (main export)
 // ═══════════════════════════════════════
-export function ModifyTab({ sessionId, config, onSave }) {
+export function ModifyTab({ sessionId, config, onSave, currentTab, initialData }) {
   const [view, setView] = useState("home"); // home | review
   const [videoUrl, setVideoUrl] = useState("");
   const [videoId, setVideoId] = useState("");
@@ -314,6 +314,32 @@ export function ModifyTab({ sessionId, config, onSave }) {
   const timeInterval = useRef(null);
 
   const base = config?.workerUrl || "";
+
+  // initialData에서 복원 (페이지 새로고침 후, KV 로드 전)
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || loaded || !initialData) return;
+    if (initialData.videoId || initialData.cards?.length > 0) {
+      setVideoUrl(initialData.videoUrl || "");
+      setVideoId(initialData.videoId || "");
+      setTitle(initialData.title || "");
+      setCards(initialData.cards || []);
+      lastSnapshot.current = JSON.stringify(initialData.cards || []);
+      if (initialData.videoId) setView("review");
+      restoredRef.current = true;
+    }
+  }, [initialData, loaded]);
+
+  // 탭 비활성화 시 즉시 저장
+  const prevTabRef = useRef(currentTab);
+  useEffect(() => {
+    if (prevTabRef.current === "modify" && currentTab !== "modify") {
+      if ((cards.length > 0 || videoId) && onSave) {
+        onSave({ videoUrl, videoId, title, cards, savedAt: new Date().toISOString() });
+      }
+    }
+    prevTabRef.current = currentTab;
+  }, [currentTab]);
 
   // ── 세션 로드 ──
   useEffect(() => {

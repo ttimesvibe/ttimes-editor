@@ -626,6 +626,26 @@ export default function App() {
   const sC = diffs.reduce((s,d)=>s+d.changes.filter(c=>c.type==="spelling").length,0);
   const hasData = blocks.length>0&&!busy;
 
+  // ── 교정된 스크립트 (탭 공유용 useMemo) ──
+  const correctedScript = useMemo(() => {
+    if (blocks.length === 0) return "";
+    return blocks.map(b => {
+      const se = scriptEdits[b.index];
+      if (se !== undefined) return se;
+      return getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index));
+    }).join("\n");
+  }, [blocks, diffs, scriptEdits]);
+
+  const correctedBlocks = useMemo(() =>
+    blocks.map(b => ({ id: b.index, speaker: b.speaker, time: b.timestamp,
+      text: getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index)) })),
+    [blocks, diffs]);
+
+  const correctedBlocksFull = useMemo(() =>
+    blocks.map(b => ({ index: b.index, speaker: b.speaker, timestamp: b.timestamp,
+      text: getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index)) })),
+    [blocks, diffs]);
+
   // ── 형광펜 마커 추가 핸들러 ──
   const handleMarkerAdd = useCallback((key, color, blockIdx, s, e) => {
     setHlMarkers(prev => {
@@ -1699,75 +1719,70 @@ export default function App() {
         </div>}
       </>}
 
-      {/* ── 하이라이트 탭 ── */}
-      {!termReview&&hasData&&tab==="highlight" && <HighlightTab
-        script={(() => {
-          const corrected = blocks.map(b => {
-            const se = scriptEdits[b.index];
-            if (se !== undefined) return se;
-            return getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index));
-          }).join("\n");
-          return corrected || blocks.map(b => b.text).join("\n");
-        })()}
-        blocks={blocks.map(b => ({ id: b.index, speaker: b.speaker, time: b.timestamp, text: getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index)) }))}
-        sessionId={sessionId}
-        config={cfg}
-        onSave={(data) => {
-          setExportCache(prev => ({ ...prev, highlight: data }));
-          if (sessionId) apiSaveTab(sessionId, "highlight", data, cfg, fn).catch(()=>{});
-        }}
-      />}
+      {/* ── 하이라이트 탭 (display:none으로 state 유지) ── */}
+      {!termReview&&hasData && <div style={{display: tab==="highlight" ? "contents" : "none"}}>
+        <HighlightTab
+          script={correctedScript}
+          blocks={correctedBlocks}
+          sessionId={sessionId}
+          config={cfg}
+          currentTab={tab}
+          initialData={exportCache.highlight}
+          onSave={(data) => {
+            setExportCache(prev => ({ ...prev, highlight: data }));
+            if (sessionId) apiSaveTab(sessionId, "highlight", data, cfg, fn).catch(()=>{});
+          }}
+        />
+      </div>}
 
-      {/* ── 세트 생성 탭 ── */}
-      {!termReview&&hasData&&tab==="setgen" && <SetgenTab
-        script={(() => {
-          const corrected = blocks.map(b => {
-            const se = scriptEdits[b.index];
-            if (se !== undefined) return se;
-            return getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index));
-          }).join("\n");
-          return corrected || blocks.map(b => b.text).join("\n");
-        })()}
-        blocks={blocks}
-        guestName={anal?.speakers?.[0]?.name?.split(" ")[0] || ""}
-        guestTitle={anal?.speakers?.[0] ? `${anal.speakers[0].name} ${anal.speakers[0].role || ""}`.trim() : ""}
-        sessionId={sessionId}
-        config={cfg}
-        keywords={anal?.overview?.keywords || []}
-        onSave={(data) => {
-          setExportCache(prev => ({ ...prev, setgen: data }));
-          if (sessionId) apiSaveTab(sessionId, "setgen", data, cfg, fn).catch(()=>{});
-        }}
-      />}
+      {/* ── 세트 생성 탭 (display:none으로 state 유지) ── */}
+      {!termReview&&hasData && <div style={{display: tab==="setgen" ? "contents" : "none"}}>
+        <SetgenTab
+          script={correctedScript}
+          blocks={blocks}
+          guestName={anal?.speakers?.[0]?.name?.split(" ")[0] || ""}
+          guestTitle={anal?.speakers?.[0] ? `${anal.speakers[0].name} ${anal.speakers[0].role || ""}`.trim() : ""}
+          sessionId={sessionId}
+          config={cfg}
+          keywords={anal?.overview?.keywords || []}
+          currentTab={tab}
+          initialData={exportCache.setgen}
+          onSave={(data) => {
+            setExportCache(prev => ({ ...prev, setgen: data }));
+            if (sessionId) apiSaveTab(sessionId, "setgen", data, cfg, fn).catch(()=>{});
+          }}
+        />
+      </div>}
 
-      {/* ── 자료 & 그래픽 탭 ── */}
-      {!termReview&&hasData&&tab==="visual" && <VisualTab
-        script={(() => {
-          const corrected = blocks.map(b => {
-            const se = scriptEdits[b.index];
-            if (se !== undefined) return se;
-            return getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index));
-          }).join("\n");
-          return corrected || blocks.map(b => b.text).join("\n");
-        })()}
-        blocks={blocks.map(b => ({ index: b.index, speaker: b.speaker, timestamp: b.timestamp, text: getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index)) }))}
-        sessionId={sessionId}
-        config={cfg}
-        onSave={(data) => {
-          setExportCache(prev => ({ ...prev, visual: data }));
-          if (sessionId) apiSaveTab(sessionId, "visual", data, cfg, fn).catch(()=>{});
-        }}
-      />}
+      {/* ── 자료 & 그래픽 탭 (display:none으로 state 유지) ── */}
+      {!termReview&&hasData && <div style={{display: tab==="visual" ? "contents" : "none"}}>
+        <VisualTab
+          script={correctedScript}
+          blocks={correctedBlocksFull}
+          sessionId={sessionId}
+          config={cfg}
+          currentTab={tab}
+          initialData={exportCache.visual}
+          onSave={(data) => {
+            setExportCache(prev => ({ ...prev, visual: data }));
+            if (sessionId) apiSaveTab(sessionId, "visual", data, cfg, fn).catch(()=>{});
+          }}
+        />
+      </div>}
 
-      {/* ── 수정사항 탭 ── */}
-      {!termReview&&tab==="modify" && <ModifyTab
-        sessionId={sessionId}
-        config={cfg}
-        onSave={(data) => {
-          setExportCache(prev => ({ ...prev, modify: data }));
-          if (sessionId) apiSaveTab(sessionId, "modify", data, cfg, fn).catch(()=>{});
-        }}
-      />}
+      {/* ── 수정사항 탭 (display:none으로 state 유지) ── */}
+      {!termReview && <div style={{display: tab==="modify" ? "contents" : "none"}}>
+        <ModifyTab
+          sessionId={sessionId}
+          config={cfg}
+          currentTab={tab}
+          initialData={exportCache.modify}
+          onSave={(data) => {
+            setExportCache(prev => ({ ...prev, modify: data }));
+            if (sessionId) apiSaveTab(sessionId, "modify", data, cfg, fn).catch(()=>{});
+          }}
+        />
+      </div>}
     </main>
 
     {showSet && <SettingsModal config={cfg} onSave={saveCfg} onClose={()=>setShowSet(false)}/>}

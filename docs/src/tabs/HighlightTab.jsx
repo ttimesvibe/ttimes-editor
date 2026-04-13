@@ -29,7 +29,7 @@ function findBestMatch(blockText, clipText) {
   return null;
 }
 
-export function HighlightTab({ script, blocks, sessionId, config, onSave }) {
+export function HighlightTab({ script, blocks, sessionId, config, onSave, currentTab, initialData }) {
   const [clips, setClips] = useState([]);
   const [recs, setRecs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -40,6 +40,24 @@ export function HighlightTab({ script, blocks, sessionId, config, onSave }) {
 
   // 초기 데이터 로드 (App.jsx에서 전달)
   const initializedRef = useRef(false);
+
+  // initialData에서 복원 (페이지 새로고침 후)
+  useEffect(() => {
+    if (initializedRef.current || !initialData) return;
+    if (initialData.clips?.length > 0) { setClips(initialData.clips); initializedRef.current = true; }
+    if (initialData.recs?.length > 0) setRecs(initialData.recs);
+  }, [initialData]);
+
+  // 탭 비활성화 시 즉시 저장
+  const prevTabRef = useRef(currentTab);
+  useEffect(() => {
+    if (prevTabRef.current === "highlight" && currentTab !== "highlight") {
+      if (clips.length > 0 && onSave) {
+        onSave({ clips, recs, savedAt: new Date().toISOString() });
+      }
+    }
+    prevTabRef.current = currentTab;
+  }, [currentTab]);
 
   // 클립 변경 시 자동 저장 debounce
   const saveTimer = useRef(null);

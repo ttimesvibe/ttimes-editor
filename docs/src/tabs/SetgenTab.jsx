@@ -46,7 +46,7 @@ const SRC_BADGE = {
 const FIELDS = ["thumbnail", "youtube_title", "description"];
 const FLABELS = { thumbnail: "썸네일/리스트 제목", youtube_title: "유튜브 제목", description: "유튜브 설명/기사/페북" };
 
-export function SetgenTab({ script, blocks, guestName, guestTitle, sessionId, config, onSave, keywords: suggestedKeywords }) {
+export function SetgenTab({ script, blocks, guestName, guestTitle, sessionId, config, onSave, keywords: suggestedKeywords, currentTab, initialData }) {
   const [gN, setGN] = useState(guestName || "");
   const [gT, setGT] = useState(guestTitle || "");
   const [result, setResult] = useState(null);
@@ -68,6 +68,31 @@ export function SetgenTab({ script, blocks, guestName, guestTitle, sessionId, co
 
   useEffect(() => { if (guestName) setGN(guestName); }, [guestName]);
   useEffect(() => { if (guestTitle) setGT(guestTitle); }, [guestTitle]);
+
+  // initialData에서 복원 (페이지 새로고침 후)
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || !initialData) return;
+    if (initialData.result) { setResult(initialData.result); restoredRef.current = true; }
+    if (initialData.trendData) setTrendData(initialData.trendData);
+    if (initialData.trendingNow) setTrendingNow(initialData.trendingNow);
+    if (initialData.keywords) setKeywords(initialData.keywords);
+    if (initialData.selections) setSel(initialData.selections);
+    if (initialData.edits) setEdits(initialData.edits);
+    if (initialData.focusKeyword) setFocusKw(initialData.focusKeyword);
+    if (initialData.timestamps) setTimestamps(initialData.timestamps);
+  }, [initialData]);
+
+  // 탭 비활성화 시 즉시 저장
+  const prevTabRef = useRef(currentTab);
+  useEffect(() => {
+    if (prevTabRef.current === "setgen" && currentTab !== "setgen") {
+      if (result && onSave) {
+        onSave({ result, trendData, trendingNow, keywords, selections: sel, edits, focusKeyword: focusKw, timestamps, savedAt: new Date().toISOString() });
+      }
+    }
+    prevTabRef.current = currentTab;
+  }, [currentTab]);
 
   // 자동 저장
   const saveTimer = useRef(null);

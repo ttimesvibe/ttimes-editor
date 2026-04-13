@@ -443,7 +443,7 @@ function InsertCutCard({ item, active, onClick, verdict, onVerdict, onRegenerate
 // ═══════════════════════════════════════
 // VISUAL TAB (main export)
 // ═══════════════════════════════════════
-export function VisualTab({ script, blocks, sessionId, config, onSave }) {
+export function VisualTab({ script, blocks, sessionId, config, onSave, currentTab, initialData }) {
   const [subTab, setSubTab] = useState("visuals");
   const [visualGuides, setVisualGuides] = useState([]);
   const [insertCuts, setInsertCuts] = useState([]);
@@ -466,6 +466,31 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
   const bEls = useRef({});
   const cEls = useRef({});
   const saveTimer = useRef(null);
+
+  // initialData에서 복원 (페이지 새로고침 후, KV 로드 전)
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || loaded || !initialData) return;
+    if (initialData.visualGuides?.length > 0 || initialData.insertCuts?.length > 0 || initialData.manualResources?.length > 0) {
+      setVisualGuides(initialData.visualGuides || []);
+      setInsertCuts(initialData.insertCuts || []);
+      setVerdicts(initialData.verdicts || {});
+      setManualResources(initialData.manualResources || []);
+      setVisualMarkers(initialData.visualMarkers || {});
+      restoredRef.current = true;
+    }
+  }, [initialData, loaded]);
+
+  // 탭 비활성화 시 즉시 저장
+  const prevTabRef = useRef(currentTab);
+  useEffect(() => {
+    if (prevTabRef.current === "visual" && currentTab !== "visual") {
+      if ((visualGuides.length > 0 || insertCuts.length > 0 || manualResources.length > 0) && onSave) {
+        onSave({ visualGuides, insertCuts, verdicts, manualResources, visualMarkers, savedAt: new Date().toISOString() });
+      }
+    }
+    prevTabRef.current = currentTab;
+  }, [currentTab]);
 
   // ── 세션 로드 ──
   useEffect(() => {
