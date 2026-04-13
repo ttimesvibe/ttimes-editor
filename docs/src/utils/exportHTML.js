@@ -121,28 +121,23 @@ export function generateExportHTML(data) {
       const corrected = getCorrectedPlain(b);
       const markedText = applyMarkers(corrected, b.index, hlMarkers);
       const hasGuides = guides.length > 0;
-      // 가이드 카드
+      // 가이드 카드 — "사용" verdict만 표시
       const cards = guides.map(h => {
         const key = `${h.block_index}-${h.subtitle}`;
         const verdict = hlVerdicts?.[key];
+        if (verdict !== "use") return ""; // 사용이 아니면 내보내기에서 제외
         const edited = hlEdits?.[key];
-        const verdictLabel = VERDICT_LABELS[verdict] || "";
-        const verdictColor = VERDICT_COLORS[verdict] || "#888";
         const cat = (h.type || "A").charAt(0);
         const isUserMat = h.type?.startsWith("C_user");
         const effectiveCat = (cat === "C" && !isUserMat) ? "A" : cat;
         const typeColor = TYPE_COLORS[effectiveCat] || "#059669";
         const catLabel = effectiveCat === "B" ? "용어설명" : isUserMat ? "자료" : "자막";
-        if (verdict === "discard") return `<div class="inline-card" style="border-left:3px solid #DC2626;opacity:0.5">
-          <span class="badge" style="background:${typeColor}15;color:${typeColor}">${catLabel}</span>
-          <span style="text-decoration:line-through;color:#888;margin-left:6px">${esc(edited || h.subtitle)}</span>
-          <span style="float:right;font-size:11px;color:#DC2626">❌ 폐기</span></div>`;
         return `<div class="inline-card" style="border-left:3px solid ${typeColor}">
           <span class="badge" style="background:${typeColor}15;color:${typeColor}">${catLabel}</span>
-          ${verdict === "use" ? `<span style="font-size:11px;color:#059669;margin-left:4px">✅</span>` : ""}
+          <span style="font-size:11px;color:#059669;margin-left:4px">✅</span>
           <div style="font-size:14px;font-weight:500;color:${typeColor};line-height:1.6;margin-top:4px;white-space:pre-line">${esc(edited || h.subtitle)}</div>
         </div>`;
-      }).join("\n");
+      }).filter(Boolean).join("\n");
       return `<div class="block${hasGuides ? " has-data" : ""}">
         <div class="block-header"><span class="block-idx">#${b.index}</span> <span class="speaker">${esc(b.speaker)}</span> <span class="ts">${esc(b.timestamp)}</span></div>
         <div class="block-text">${markedText}</div>
@@ -153,6 +148,94 @@ export function generateExportHTML(data) {
       <p class="meta">총 ${hl.length}개 · 사용 ${useCount}개 · 추천 ${recCount}개</p>
       ${rows}
     `, true);
+  }
+
+  // ── 차트 데이터 → 정적 HTML 렌더링 ──
+  function renderChartHTML(type, chart_data, title) {
+    if (!chart_data) return "";
+    const d = chart_data;
+    const labels = d.labels || [];
+    const datasets = d.datasets || [];
+    const VIS_COLORS = ["#3B82F6","#8B5CF6","#EF4444","#22C55E","#F59E0B","#EC4899","#06B6D4","#F97316"];
+
+    // 테이블 형식 (table, comparison, ranking)
+    if (["table","comparison","ranking"].includes(type)) {
+      if (d.rows) {
+        const headers = d.headers || Object.keys(d.rows[0] || {});
+        return `<table style="margin:8px 0">
+          <tr>${headers.map(h => `<th>${esc(String(h))}</th>`).join("")}</tr>
+          ${d.rows.map(r => `<tr>${headers.map(h => `<td>${esc(String(r[h] ?? ""))}</td>`).join("")}</tr>`).join("")}
+        </table>`;
+      }
+      if (labels.length && datasets.length) {
+        return `<table style="margin:8px 0">
+          <tr><th></th>${datasets.map(ds => `<th>${esc(ds.label || "")}</th>`).join("")}</tr>
+          ${labels.map((lb, i) => `<tr><td><strong>${esc(String(lb))}</strong></td>${datasets.map(ds => `<td>${(ds.data||[])[i] ?? ""}${d.unit||""}</td>`).join("")}</tr>`).join("")}
+        </table>`;
+      }
+    }
+
+    // KPI
+    if (type === "kpi" && d.items) {
+      return `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:8px 0">${d.items.map(item =>
+        `<div style="background:#F0F9FF;border:1px solid #DBEAFE;border-radius:8px;padding:10px 16px;text-align:center;min-width:100px">
+          <div style="font-size:20px;font-weight:800;color:#2563EB">${esc(String(item.value ?? ""))}${esc(item.unit||"")}</div>
+          <div style="font-size:12px;color:#666;margin-top:2px">${esc(item.label || "")}</div>
+        </div>`).join("")}</div>`;
+    }
+
+    // 막대 차트 (bar, bar_horizontal)
+    if (["bar","bar_horizontal","bar_stacked"].includes(type) && labels.length && datasets.length) {
+      const allVals = datasets.flatMap(ds => ds.data || []);
+      const maxVal = Math.max(...allVals, 1);
+      const isH = type === "bar_horizontal";
+      return `<div style="margin:8px 0">${labels.map((lb, i) => {
+        const vals = datasets.map((ds, di) => ({ val: (ds.data||[])[i]||0, color: (ds.colors||VIS_COLORS)[isH ? di : i % VIS_COLORS.length], label: ds.label }));
+        return `<div style="display:flex;align-items:center;gap:8px;margin:3px 0">
+          <span style="font-size:12px;color:#666;width:90px;text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(String(lb))}</span>
+          <div style="flex:1;display:flex;gap:2px">${vals.map(v =>
+            `<div style="height:18px;border-radius:3px;background:${v.color};width:${(v.val/maxVal)*100}%;min-width:${v.val>0?2:0}px"></div>`).join("")}</div>
+          <span style="font-size:11px;color:#888;width:50px">${vals.map(v=>v.val).join("/")}${d.unit||""}</span>
+        </div>`;
+      }).join("")}</div>`;
+    }
+
+    // 도넛/파이
+    if (["donut","pie"].includes(type) && labels.length && datasets.length) {
+      const data0 = datasets[0]?.data || [];
+      const total = data0.reduce((s,v)=>s+v, 0) || 1;
+      return `<div style="margin:8px 0">${labels.map((lb, i) => {
+        const pct = ((data0[i]||0)/total*100).toFixed(1);
+        return `<div style="display:flex;align-items:center;gap:8px;margin:2px 0">
+          <span style="width:10px;height:10px;border-radius:50%;background:${VIS_COLORS[i%VIS_COLORS.length]};flex-shrink:0"></span>
+          <span style="font-size:12px;color:#333;flex:1">${esc(String(lb))}</span>
+          <span style="font-size:12px;font-weight:700;color:#333">${pct}%</span>
+          <span style="font-size:11px;color:#888">(${data0[i]||0}${d.unit||""})</span>
+        </div>`;
+      }).join("")}</div>`;
+    }
+
+    // 프로세스/타임라인
+    if (["process","timeline"].includes(type) && d.steps) {
+      return `<div style="margin:8px 0;padding-left:12px;border-left:3px solid #DBEAFE">${d.steps.map((st, i) =>
+        `<div style="margin:6px 0"><span style="font-size:11px;font-weight:700;color:#3B82F6;margin-right:6px">${i+1}.</span><span style="font-size:13px">${esc(st.label || st.title || String(st))}</span>${st.description ? `<div style="font-size:12px;color:#888;margin-left:20px">${esc(st.description)}</div>` : ""}</div>`).join("")}</div>`;
+    }
+
+    // 체크리스트
+    if (type === "checklist" && d.items) {
+      return `<div style="margin:8px 0">${d.items.map(item =>
+        `<div style="margin:2px 0;font-size:13px">☐ ${esc(item.label || String(item))}</div>`).join("")}</div>`;
+    }
+
+    // 기본: 라인/기타 — 데이터 테이블로 표시
+    if (labels.length && datasets.length) {
+      return `<table style="margin:8px 0">
+        <tr><th></th>${datasets.map(ds => `<th>${esc(ds.label || "")}</th>`).join("")}</tr>
+        ${labels.map((lb, i) => `<tr><td>${esc(String(lb))}</td>${datasets.map(ds => `<td>${(ds.data||[])[i] ?? ""}${d.unit||""}</td>`).join("")}</tr>`).join("")}
+      </table>`;
+    }
+
+    return "";
   }
 
   // 5. 자료 & 그래픽 가이드 — 블록 인라인
@@ -178,51 +261,56 @@ export function generateExportHTML(data) {
       const hasData = vis.length + ics.length + res.length > 0;
       const corrected = getCorrectedPlain(b);
       const markedText = applyMarkers(corrected, b.index, vc.visualMarkers);
-      // 시각화 카드
+      // 시각화 카드 — "사용"만 표시 + 차트 시각화 포함
       const visCards = vis.map(v => {
-        const vd = vc.verdicts?.[`vis-${v.id}`]; const isUse = vd === "use"; const isDis = vd === "discard";
-        return `<div class="inline-card" style="border-left:3px solid ${isDis ? "#DC2626" : "#3B82F6"};${isDis ? "opacity:0.5;" : ""}">
+        const vd = vc.verdicts?.[`vis-${v.id}`];
+        if (vd !== "use") return ""; // 사용이 아니면 제외
+        const chartHTML = renderChartHTML(v.type, v.chart_data, v.title);
+        return `<div class="inline-card" style="border-left:3px solid #3B82F6">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:13px">📊</span>
             <span class="badge" style="background:rgba(59,130,246,0.1);color:#3B82F6">${esc(v.type)}</span>
-            <span style="font-weight:600;color:#3B82F6;flex:1;${isDis ? "text-decoration:line-through;" : ""}">${esc(v.title)}</span>
-            ${isUse ? '<span style="font-size:11px;color:#059669">✅</span>' : isDis ? '<span style="font-size:11px;color:#DC2626">❌</span>' : ""}
+            <span style="font-weight:600;color:#3B82F6;flex:1">${esc(v.title)}</span>
+            <span style="font-size:11px;color:#059669">✅</span>
           </div>
           ${v.reason ? `<div style="font-size:12px;color:#666;margin-top:4px">${esc(v.reason)}</div>` : ""}
+          ${chartHTML}
           <div style="font-size:11px;color:#888;margin-top:2px">${v.priority || ""} ${v.duration_seconds ? "· " + v.duration_seconds + "초" : ""}</div>
         </div>`;
-      }).join("");
-      // 인서트 컷 카드
+      }).filter(Boolean).join("");
+      // 인서트 컷 카드 — "사용"만 표시
       const icCards = ics.map(ic => {
-        const vd = vc.verdicts?.[`ic-${ic.id}`]; const isUse = vd === "use"; const isDis = vd === "discard";
+        const vd = vc.verdicts?.[`ic-${ic.id}`];
+        if (vd !== "use") return "";
         const icColor = IC_COLORS[ic.type] || "#3B82F6";
-        return `<div class="inline-card" style="border-left:3px solid ${isDis ? "#DC2626" : icColor};${isDis ? "opacity:0.5;" : ""}">
+        return `<div class="inline-card" style="border-left:3px solid ${icColor}">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:13px">${(IC_LABELS[ic.type] || "🎬").split(" ")[0]}</span>
             <span class="badge" style="background:${icColor}15;color:${icColor}">Type ${esc(ic.type)}</span>
-            <span style="font-weight:600;color:${icColor};flex:1;${isDis ? "text-decoration:line-through;" : ""}">${esc(ic.title)}</span>
-            ${isUse ? '<span style="font-size:11px;color:#059669">✅</span>' : isDis ? '<span style="font-size:11px;color:#DC2626">❌</span>' : ""}
+            <span style="font-weight:600;color:${icColor};flex:1">${esc(ic.title)}</span>
+            <span style="font-size:11px;color:#059669">✅</span>
           </div>
           ${ic.trigger_quote ? `<div style="font-style:italic;color:#555;margin:4px 0;border-left:2px solid #ddd;padding-left:8px;font-size:13px">"${esc(ic.trigger_quote)}"</div>` : ""}
           ${ic.instruction ? `<div style="font-size:12px;color:#666">${esc(ic.instruction)}</div>` : ""}
           ${ic.image_prompt ? `<div style="font-size:11px;color:#7C3AED;margin-top:4px">🖼 ${esc(ic.image_prompt)}</div>` : ""}
           ${ic.search_keywords?.length ? `<div style="margin-top:3px">${ic.search_keywords.map(k => `<span class="tag">${esc(k)}</span>`).join(" ")}</div>` : ""}
         </div>`;
-      }).join("");
-      // 수동 자료 카드
+      }).filter(Boolean).join("");
+      // 수동 자료 카드 — "사용"만 표시
       const resCards = res.map(r => {
-        const vd = vc.verdicts?.[`res-${r.id}`]; const isUse = vd === "use"; const isDis = vd === "discard";
+        const vd = vc.verdicts?.[`res-${r.id}`];
+        if (vd !== "use") return "";
         const rc = RES_COLORS[r.type] || "#F59E0B";
-        return `<div class="inline-card" style="border-left:3px solid ${isDis ? "#DC2626" : "#F97316"};${isDis ? "opacity:0.5;" : ""}">
+        return `<div class="inline-card" style="border-left:3px solid #F97316">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:13px">📎</span>
             <span class="badge" style="background:${rc}15;color:${rc}">${RES_LABELS[r.type] || r.type}</span>
-            <span style="font-weight:600;color:#F97316;flex:1;${isDis ? "text-decoration:line-through;" : ""}">${esc(r.text)}</span>
-            ${isUse ? '<span style="font-size:11px;color:#059669">✅</span>' : isDis ? '<span style="font-size:11px;color:#DC2626">❌</span>' : ""}
+            <span style="font-weight:600;color:#F97316;flex:1">${esc(r.text)}</span>
+            <span style="font-size:11px;color:#059669">✅</span>
           </div>
           ${r.source ? `<div style="font-size:12px;color:#888;margin-top:2px">출처: ${esc(r.source)}</div>` : ""}
         </div>`;
-      }).join("");
+      }).filter(Boolean).join("");
       return `<div class="block${hasData ? " has-data" : ""}">
         <div class="block-header"><span class="block-idx">#${b.index}</span> <span class="speaker">${esc(b.speaker)}</span> <span class="ts">${esc(b.timestamp)}</span></div>
         <div class="block-text">${markedText}</div>
