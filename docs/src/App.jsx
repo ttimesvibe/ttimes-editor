@@ -21,6 +21,7 @@ import { TermReviewScreen } from "./components/TermReviewScreen.jsx";
 import { HighlightTab } from "./tabs/HighlightTab.jsx";
 import { SetgenTab } from "./tabs/SetgenTab.jsx";
 import { VisualTab } from "./tabs/VisualTab.jsx";
+import { ModifyTab } from "./tabs/ModifyTab.jsx";
 
 // ═══════════════════════════════════════════════
 // MAIN APP
@@ -733,13 +734,13 @@ export default function App() {
           background:"rgba(168,85,247,0.15)",color:"#A855F7",border:"1px solid rgba(168,85,247,0.3)"}}>
           읽기 전용
         </span>}
-        {hasData&&!termReview && <div style={{display:"flex",gap:1,background:"rgba(255,255,255,0.04)",borderRadius:7,padding:2}}>
-          {[["review","0차 검토"],["correction","1차 교정"],["script","스크립트"],["guide","편집 가이드"],["visual","자료·그래픽"],["highlight","하이라이트"],["setgen","세트"]].map(([id,l])=>
+        {(hasData||tab==="modify")&&!termReview && <div style={{display:"flex",gap:1,background:"rgba(255,255,255,0.04)",borderRadius:7,padding:2}}>
+          {[["review","0차 검토"],["correction","1차 교정"],["script","스크립트"],["guide","편집 가이드"],["visual","자료·그래픽"],["highlight","하이라이트"],["setgen","세트"],["modify","수정사항"]].map(([id,l])=>
             <button key={id} onClick={()=>setTab(id)} style={{padding:"5px 10px",borderRadius:5,border:"none",cursor:"pointer",
               fontSize:11,fontWeight:tab===id?600:400,background:tab===id?C.ac:"transparent",
               color:tab===id?"#fff":C.txM,transition:"all 0.12s",whiteSpace:"nowrap",
-              opacity:id==="review"&&!reviewData?0.4:1,
-              pointerEvents:id==="review"&&!reviewData?"none":"auto"}}>{l}{id==="guide"&&gReady?" ✓":""}</button>)}
+              opacity:(id==="review"&&!reviewData)||(id!=="modify"&&!hasData)?0.4:1,
+              pointerEvents:(id==="review"&&!reviewData)||(id!=="modify"&&!hasData)?"none":"auto"}}>{l}{id==="guide"&&gReady?" ✓":""}</button>)}
         </div>}
         {hasData && !readOnly && !termReview && (
           <button onClick={handleShare} disabled={saving} style={{padding:"5px 14px",borderRadius:6,border:"none",
@@ -808,6 +809,12 @@ export default function App() {
           파일 업로드 → 자동 사전 분석 + 필러 제거 + 용어 교정<br/>
           이후 편집 가이드에서 강조자막 생성 (v2 룰북 2-Pass)
         </p>
+        <div style={{textAlign:"center",marginTop:24,paddingTop:16,borderTop:`1px solid ${C.bd}`}}>
+          <button onClick={()=>setTab("modify")} style={{background:"transparent",border:`1px solid ${C.bd}`,borderRadius:8,
+            padding:"10px 24px",cursor:"pointer",color:C.ac,fontSize:13,fontFamily:FN,fontWeight:500,transition:"all 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=C.ac} onMouseLeave={e=>e.currentTarget.style.borderColor=C.bd}>
+            🎬 원고 없이 영상 수정사항 작성하기</button>
+        </div>
       </div>}
 
       {/* 0차: 원고 검토 (삭제선 표시 + 분량 계산) */}
@@ -1703,6 +1710,15 @@ export default function App() {
         config={cfg}
         onSave={(data) => {
           if (sessionId) apiSaveTab(sessionId, "visual", data, cfg, fn).catch(()=>{});
+        }}
+      />}
+
+      {/* ── 수정사항 탭 ── */}
+      {!termReview&&tab==="modify" && <ModifyTab
+        sessionId={sessionId}
+        config={cfg}
+        onSave={(data) => {
+          if (sessionId) apiSaveTab(sessionId, "modify", data, cfg, fn).catch(()=>{});
         }}
       />}
     </main>

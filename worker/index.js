@@ -1,5 +1,5 @@
 // ttimes-editor — Cloudflare Worker
-// 7개 엔드포인트: /analyze, /correct, /highlights, /visuals, /insert-cuts, /save, /load/:id
+// 8개 엔드포인트: /analyze, /correct, /highlights, /visuals, /insert-cuts, /save, /load/:id, /save-image
 // OpenAI GPT-5.1 API 프록시 + CORS 완전 제어 + KV 세션 저장
 // /correct: v4 통합 교정 (필러+용어+맞춤법+구어체 단일 호출 + 코드 검증)
 // /highlights: v2 룰북 기반 2-Pass (Draft Agent → Editor Agent) + 청크 분할 지원
@@ -15,7 +15,7 @@ export default {
       return new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+          "Access-Control-Allow-Methods": "POST, GET, DELETE, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
           "Access-Control-Max-Age": "86400",
         },
@@ -27,6 +27,13 @@ export default {
 
 if (path === "/debug-location") {
       return new Response(JSON.stringify({ colo: request.cf?.colo, country: request.cf?.country, city: request.cf?.city }), { headers: corsHeaders });
+    }
+
+    // /image/{sessionId}/{cardId} — 이미지 GET/DELETE
+    const imageMatch = path.match(/^\/image\/([a-zA-Z0-9]+)\/([a-zA-Z0-9]+)$/);
+    if (imageMatch) {
+      if (request.method === "GET") return await handleImageGet(imageMatch[1], imageMatch[2], env, corsHeaders);
+      if (request.method === "DELETE") return await handleImageDelete(imageMatch[1], imageMatch[2], env, corsHeaders);
     }
 
     // /load/{id}/{tab} — 특정 탭 데이터 로드 (tab-based)
@@ -64,6 +71,7 @@ if (path === "/debug-location") {
     try {
       const body = await request.json();
 
+      if (path === "/save-image") return await handleSaveImage(body, env, corsHeaders);
       if (path === "/dict") return await handleDictPost(body, env, corsHeaders);
       else if (path === "/save") return await handleSave(body, env, corsHeaders);
       else if (path === "/autosave") return await handleAutoSave(body, env, corsHeaders);
@@ -2425,4 +2433,34 @@ async function handleSetgen(body, env, headers) {
   } catch (e) {
     return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers });
   }
+}
+
+// ═══════════════════════════════════════
+// /save-image, /image — 스크린샷 이미지 저장/로드/삭제
+// ═══════════════════════════════════════
+
+async function handleSaveImage(body, env, headers) {
+  if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
+  const { sessionId, cardId, imageData } = body;
+  if (!sessionId || !cardId || !imageData) {
+    return new Response(JSON.stringify({ error: "sessionId, cardId, imageData 필수" }), { status: 400, headers });
+  }
+  // base64 이미지 저장 (TTL 365일)
+  await env.SESSIONS.put(`s:${sessionId}:img:${cardId}`, imageData, { expirationTtl: 365 * 86400 });
+  return new Response(JSON.stringify({ success: true }), { headers });
+}
+
+async function handleImageGet(sessionId, cardId, env, headers) {
+  if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
+  const imageData = await env.SESSIONS.get(`s:${sessionId}:img:${cardId}`);
+  if (!imageData) {
+    return new Response(JSON.stringify({ error: "이미지 없음" }), { status: 404, headers });
+  }
+  return new Response(JSON.stringify({ success: true, imageData }), { headers });
+}
+
+async function handleImageDelete(sessionId, cardId, env, headers) {
+  if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
+  await env.SESSIONS.delete(`s:${sessionId}:img:${cardId}`);
+  return new Response(JSON.stringify({ success: true }), { headers });
 }
