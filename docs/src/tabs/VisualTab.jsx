@@ -488,13 +488,13 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
     })();
   }, [sessionId, config, loaded]);
 
-  // ── 디바운스 자동저장 ──
+  // ── 디바운스 자동저장 (3분 — KV 쓰기 한도 절약) ──
   useEffect(() => {
     if (visualGuides.length === 0 && insertCuts.length === 0 && manualResources.length === 0) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       onSave?.({ visualGuides, insertCuts, verdicts, manualResources, visualMarkers, savedAt: new Date().toISOString() });
-    }, 5000);
+    }, 3 * 60 * 1000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [visualGuides, insertCuts, verdicts, manualResources, visualMarkers, onSave]);
 

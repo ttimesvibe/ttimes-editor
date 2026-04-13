@@ -357,7 +357,7 @@ export function ModifyTab({ sessionId, config, onSave }) {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       saveNow(cards);
-    }, 5000);
+    }, 3 * 60 * 1000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [cards, title]);
 

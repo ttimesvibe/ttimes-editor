@@ -48,7 +48,7 @@ export function HighlightTab({ script, blocks, sessionId, config, onSave }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       onSave({ clips, recs, savedAt: new Date().toISOString() });
-    }, 5000);
+    }, 3 * 60 * 1000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [clips, recs]);
 

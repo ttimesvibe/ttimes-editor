@@ -76,7 +76,7 @@ export function SetgenTab({ script, blocks, guestName, guestTitle, sessionId, co
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       onSave({ result, trendData, trendingNow, keywords, selections: sel, edits, focusKeyword: focusKw, timestamps, savedAt: new Date().toISOString() });
-    }, 5000);
+    }, 3 * 60 * 1000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [result, sel, edits, timestamps]);
 
