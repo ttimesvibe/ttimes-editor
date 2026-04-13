@@ -1,11 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { C, FN } from "../utils/styles.js";
-import { apiHlRecommend, apiHlTimestamps } from "../utils/api.js";
+import { apiHlRecommend } from "../utils/api.js";
 
 const CPS = 9.0; // ttimes 학습 데이터 기준 542.7자/분
-const SLOPE = 0.001210;
-const INTERCEPT = 7.05;
-const predictMinutes = (totalChars) => SLOPE * totalChars + INTERCEPT;
 
 function findBestMatch(blockText, clipText) {
   let idx = blockText.indexOf(clipText);
@@ -40,10 +37,6 @@ export function HighlightTab({ script, blocks, sessionId, config, onSave }) {
   const [dragIdx, setDragIdx] = useState(null);
   const [copied, setCopied] = useState(false);
   const [showRecs, setShowRecs] = useState(true);
-  const [timestamps, setTimestamps] = useState(null);
-  const [showTimestamps, setShowTimestamps] = useState(true);
-  const [tsLoading, setTsLoading] = useState(false);
-  const [tsCopied, setTsCopied] = useState(false);
 
   // 초기 데이터 로드 (App.jsx에서 전달)
   const initializedRef = useRef(false);
@@ -54,10 +47,10 @@ export function HighlightTab({ script, blocks, sessionId, config, onSave }) {
     if (!onSave || clips.length === 0) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      onSave({ clips, recs, timestamps, savedAt: new Date().toISOString() });
+      onSave({ clips, recs, savedAt: new Date().toISOString() });
     }, 5000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [clips, recs, timestamps]);
+  }, [clips, recs]);
 
   const scriptBlocks = blocks.length > 0 ? blocks : (() => {
     const lines = (script || "").split("\n").filter(l => l.trim());
@@ -85,33 +78,6 @@ export function HighlightTab({ script, blocks, sessionId, config, onSave }) {
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
   }, [script, config]);
-
-  const generateTimestamps = useCallback(async () => {
-    if (!script) return;
-    setTsLoading(true); setErr(null);
-    try {
-      const result = await apiHlTimestamps(script, config);
-      const chapters = result.chapters || [];
-      const totalChars = scriptBlocks.reduce((s, b) => s + (b.text || "").length, 0);
-      const totalMin = predictMinutes(totalChars);
-      const fullText = scriptBlocks.map(b => b.text || "").join(" ");
-      const withTimes = chapters.map((ch, i) => {
-        let charPos = 0;
-        if (i > 0) {
-          const match = findBestMatch(fullText, ch.anchor_text || "");
-          charPos = match ? match.start : Math.round((i / chapters.length) * fullText.length);
-        }
-        const ratio = charPos / fullText.length;
-        const timeMin = ratio * totalMin;
-        const mm = Math.floor(timeMin);
-        const ss = Math.round((timeMin - mm) * 60);
-        return { ...ch, time: `${mm}:${ss.toString().padStart(2, "0")}`, ratio, charPos };
-      });
-      setTimestamps(withTimes);
-      setShowTimestamps(true);
-    } catch (e) { setErr("타임스탬프 생성 실패: " + e.message); }
-    finally { setTsLoading(false); }
-  }, [script, scriptBlocks, config]);
 
   const handleTextSelect = useCallback(() => {
     const sel = window.getSelection();
@@ -163,12 +129,6 @@ export function HighlightTab({ script, blocks, sessionId, config, onSave }) {
     navigator.clipboard.writeText(clips.map(c => c.text).join("\n"));
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
-  const copyTimestamps = () => {
-    if (!timestamps) return;
-    navigator.clipboard.writeText(timestamps.map(t => `${t.time} ${t.title}`).join("\n"));
-    setTsCopied(true); setTimeout(() => setTsCopied(false), 2000);
-  };
-
   const scrollToClip = (clip) => {
     const matchText = clip.originalText || clip.text;
     let targetId = clip.blockId;
@@ -221,9 +181,6 @@ export function HighlightTab({ script, blocks, sessionId, config, onSave }) {
           {showRecs ? "AI 추천 숨기기" : "AI 추천 표시"}</button>}
         <span style={{fontSize:12,color:C.txD}}>원고를 드래그하여 직접 선택할 수도 있습니다</span>
         <div style={{marginLeft:"auto",display:"flex",gap:8}}>
-          <button onClick={timestamps ? ()=>setShowTimestamps(!showTimestamps) : generateTimestamps} disabled={tsLoading}
-            style={{fontSize:12,padding:"5px 14px",borderRadius:6,border:"1px solid #8B5CF6",background:tsLoading?"#999":timestamps&&showTimestamps?"#8B5CF6":"rgba(139,92,246,0.08)",color:tsLoading?"#fff":timestamps&&showTimestamps?"#fff":"#8B5CF6",fontWeight:600,cursor:"pointer"}}>
-            {tsLoading ? "생성 중..." : timestamps ? (showTimestamps ? "타임스탬프 ▲" : "타임스탬프 ▼") : "타임스탬프"}</button>
           {clips.length > 0 && <button onClick={copyAll}
             style={{fontSize:12,padding:"5px 14px",borderRadius:6,border:`1px solid ${C.bd}`,background:C.sf,color:C.txM,cursor:"pointer"}}>
             {copied?"복사됨":"텍스트 복사"}</button>}
@@ -246,31 +203,6 @@ export function HighlightTab({ script, blocks, sessionId, config, onSave }) {
 
     {/* Right: Clip Panel */}
     <div style={{width:360,flexShrink:0,overflowY:"auto",background:C.sf,padding:"16px 16px"}}>
-      {/* Timestamp Section */}
-      {timestamps && showTimestamps && <div style={{marginBottom:20,borderRadius:10,border:"1px solid rgba(139,92,246,0.3)",background:"rgba(139,92,246,0.04)",overflow:"hidden"}}>
-        <div style={{padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid rgba(139,92,246,0.15)"}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#8B5CF6"}}>타임스탬프 ({timestamps.length}개)</div>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={generateTimestamps} disabled={tsLoading} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(139,92,246,0.3)",background:"transparent",color:"#8B5CF6",cursor:"pointer",fontWeight:600}}>
-              {tsLoading ? "생성 중..." : "재생성"}</button>
-            <button onClick={copyTimestamps} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(139,92,246,0.3)",background:tsCopied?"#8B5CF6":"transparent",color:tsCopied?"#fff":"#8B5CF6",cursor:"pointer",fontWeight:600}}>
-              {tsCopied ? "복사됨" : "복사"}</button>
-          </div>
-        </div>
-        <div style={{padding:"8px 14px 12px"}}>
-          {timestamps.map((t, i) => <div key={i} style={{padding:"6px 0",borderBottom:i<timestamps.length-1?"1px solid rgba(139,92,246,0.08)":"none",display:"flex",gap:10,alignItems:"flex-start"}}>
-            <span style={{fontSize:13,fontWeight:700,color:"#8B5CF6",flexShrink:0,fontVariantNumeric:"tabular-nums",minWidth:36}}>{t.time}</span>
-            <div>
-              <div style={{fontSize:13,fontWeight:600,color:C.tx,lineHeight:1.5}}>{t.title}</div>
-              {t.summary && <div style={{fontSize:11,color:C.txD,marginTop:2,lineHeight:1.4}}>{t.summary}</div>}
-            </div>
-          </div>)}
-          <div style={{marginTop:10,padding:"8px 10px",borderRadius:6,background:"rgba(139,92,246,0.06)",fontSize:11,color:C.txD,lineHeight:1.5}}>
-            예상 영상 길이: <strong style={{color:"#8B5CF6"}}>{Math.floor(predictMinutes(scriptBlocks.reduce((s,b)=>s+(b.text||"").length,0)))}분 {Math.round((predictMinutes(scriptBlocks.reduce((s,b)=>s+(b.text||"").length,0)) % 1) * 60)}초</strong>
-          </div>
-        </div>
-      </div>}
-
       <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>하이라이트 구성</div>
       <div style={{fontSize:12,color:C.txD,marginBottom:12}}>
         {clips.length}개 클립 · <span style={{fontWeight:700,color:getTimeColor()}}>{totalSeconds}초</span> / 30~40초

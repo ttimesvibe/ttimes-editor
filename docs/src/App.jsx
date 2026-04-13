@@ -1676,6 +1676,7 @@ export default function App() {
           }).join("\n");
           return corrected || blocks.map(b => b.text).join("\n");
         })()}
+        blocks={blocks}
         guestName={anal?.speakers?.[0]?.name?.split(" ")[0] || ""}
         guestTitle={anal?.speakers?.[0] ? `${anal.speakers[0].name} ${anal.speakers[0].role || ""}`.trim() : ""}
         sessionId={sessionId}

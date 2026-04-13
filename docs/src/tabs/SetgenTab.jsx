@@ -1,6 +1,35 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { C, FN } from "../utils/styles.js";
-import { apiSetgen } from "../utils/api.js";
+import { apiSetgen, apiHlTimestamps } from "../utils/api.js";
+
+const SLOPE = 0.001210;
+const INTERCEPT = 7.05;
+const predictMinutes = (totalChars) => SLOPE * totalChars + INTERCEPT;
+
+function findBestMatch(blockText, clipText) {
+  let idx = blockText.indexOf(clipText);
+  if (idx >= 0) return { start: idx, end: idx + clipText.length, exact: true };
+  const minChunk = 3;
+  if (clipText.length < minChunk) return null;
+  let bestStart = -1, bestEnd = -1, bestLen = 0;
+  for (let len = Math.min(clipText.length, 40); len >= minChunk; len -= 5) {
+    const headChunk = clipText.substring(0, len);
+    const hIdx = blockText.indexOf(headChunk);
+    if (hIdx >= 0 && len > bestLen) {
+      const tailChunk = clipText.slice(-Math.min(len, 30));
+      const tIdx = blockText.indexOf(tailChunk, hIdx);
+      if (tIdx >= 0) { bestStart = hIdx; bestEnd = tIdx + tailChunk.length; bestLen = bestEnd - bestStart; break; }
+      else { bestStart = hIdx; bestEnd = Math.min(hIdx + clipText.length + 10, blockText.length); bestLen = len; }
+    }
+  }
+  if (bestStart >= 0 && bestLen >= minChunk) return { start: bestStart, end: bestEnd, exact: false };
+  for (let len = Math.min(clipText.length, 40); len >= minChunk; len -= 5) {
+    const tailChunk = clipText.slice(-len);
+    const tIdx = blockText.indexOf(tailChunk);
+    if (tIdx >= 0) return { start: Math.max(0, tIdx - clipText.length + len), end: tIdx + tailChunk.length, exact: false };
+  }
+  return null;
+}
 
 const TYPE_LABELS = { balanced: "밸런스", trend: "트렌드 공략", focus: "선택과 집중", script: "스크립트 충실" };
 const TYPE_COLORS = {
@@ -17,7 +46,7 @@ const SRC_BADGE = {
 const FIELDS = ["thumbnail", "youtube_title", "description"];
 const FLABELS = { thumbnail: "썸네일/리스트 제목", youtube_title: "유튜브 제목", description: "유튜브 설명/기사/페북" };
 
-export function SetgenTab({ script, guestName, guestTitle, sessionId, config, onSave, keywords: suggestedKeywords }) {
+export function SetgenTab({ script, blocks, guestName, guestTitle, sessionId, config, onSave, keywords: suggestedKeywords }) {
   const [gN, setGN] = useState(guestName || "");
   const [gT, setGT] = useState(guestTitle || "");
   const [result, setResult] = useState(null);
@@ -32,6 +61,10 @@ export function SetgenTab({ script, guestName, guestTitle, sessionId, config, on
   const [copied, setCopied] = useState(false);
   const [showTrend, setShowTrend] = useState(false);
   const [focusKw, setFocusKw] = useState("");
+  const [timestamps, setTimestamps] = useState(null);
+  const [showTimestamps, setShowTimestamps] = useState(true);
+  const [tsLoading, setTsLoading] = useState(false);
+  const [tsCopied, setTsCopied] = useState(false);
 
   useEffect(() => { if (guestName) setGN(guestName); }, [guestName]);
   useEffect(() => { if (guestTitle) setGT(guestTitle); }, [guestTitle]);
@@ -42,10 +75,60 @@ export function SetgenTab({ script, guestName, guestTitle, sessionId, config, on
     if (!onSave || !result) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      onSave({ result, trendData, trendingNow, keywords, selections: sel, edits, focusKeyword: focusKw, savedAt: new Date().toISOString() });
+      onSave({ result, trendData, trendingNow, keywords, selections: sel, edits, focusKeyword: focusKw, timestamps, savedAt: new Date().toISOString() });
     }, 5000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [result, sel, edits]);
+  }, [result, sel, edits, timestamps]);
+
+  const scriptBlocks = blocks?.length > 0 ? blocks : (() => {
+    const lines = (script || "").split("\n").filter(l => l.trim());
+    const res = [];
+    let id = 0;
+    const speakerRe = /^([가-힣a-zA-Z]+)\s+(\d{1,2}:\d{2}(?::\d{2})?)/;
+    let current = null;
+    for (const line of lines) {
+      const m = line.match(speakerRe);
+      if (m) {
+        if (current) res.push(current);
+        current = { speaker: m[1], time: m[2], text: line.substring(m[0].length).trim(), id: id++ };
+      } else if (current) { current.text += " " + line.trim(); }
+    }
+    if (current) res.push(current);
+    return res;
+  })();
+
+  const generateTimestamps = useCallback(async () => {
+    if (!script) return;
+    setTsLoading(true); setErr(null);
+    try {
+      const tsResult = await apiHlTimestamps(script, config);
+      const chapters = tsResult.chapters || [];
+      const totalChars = scriptBlocks.reduce((s, b) => s + (b.text || "").length, 0);
+      const totalMin = predictMinutes(totalChars);
+      const fullText = scriptBlocks.map(b => b.text || "").join(" ");
+      const withTimes = chapters.map((ch, i) => {
+        let charPos = 0;
+        if (i > 0) {
+          const match = findBestMatch(fullText, ch.anchor_text || "");
+          charPos = match ? match.start : Math.round((i / chapters.length) * fullText.length);
+        }
+        const ratio = charPos / fullText.length;
+        const timeMin = ratio * totalMin;
+        const mm = Math.floor(timeMin);
+        const ss = Math.round((timeMin - mm) * 60);
+        return { ...ch, time: `${mm}:${ss.toString().padStart(2, "0")}`, ratio, charPos };
+      });
+      setTimestamps(withTimes);
+      setShowTimestamps(true);
+    } catch (e) { setErr("타임스탬프 생성 실패: " + e.message); }
+    finally { setTsLoading(false); }
+  }, [script, scriptBlocks, config]);
+
+  const copyTimestamps = () => {
+    if (!timestamps) return;
+    navigator.clipboard.writeText(timestamps.map(t => `${t.time} ${t.title}`).join("\n"));
+    setTsCopied(true); setTimeout(() => setTsCopied(false), 2000);
+  };
 
   const generate = useCallback(async () => {
     if (!script?.trim()) { setErr("원고를 먼저 업로드하세요."); return; }
@@ -137,11 +220,39 @@ export function SetgenTab({ script, guestName, guestTitle, sessionId, config, on
   return <div style={{maxWidth:860,margin:"20px auto",padding:"0 20px 60px",overflowY:"auto",maxHeight:"calc(100vh - 90px)"}}>
     {/* Header actions */}
     <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:14}}>
+      <button onClick={timestamps ? ()=>setShowTimestamps(!showTimestamps) : generateTimestamps} disabled={tsLoading}
+        style={{fontSize:12,padding:"5px 14px",borderRadius:6,border:"1px solid #8B5CF6",background:tsLoading?"#999":timestamps&&showTimestamps?"#8B5CF6":"rgba(139,92,246,0.08)",color:tsLoading?"#fff":timestamps&&showTimestamps?"#fff":"#8B5CF6",fontWeight:600,cursor:"pointer"}}>
+        {tsLoading ? "생성 중..." : timestamps ? (showTimestamps ? "타임스탬프 ▲" : "타임스탬프 ▼") : "타임스탬프"}</button>
       <button onClick={copyAll} style={{fontSize:12,padding:"5px 14px",borderRadius:6,border:"none",background:copied?"#16A34A":"#5B4CD4",color:"#fff",fontWeight:600,cursor:"pointer"}}>
         {copied ? "복사 완료" : "전체 복사"}</button>
-      <button onClick={()=>{setResult(null);setTrendData(null);setTrendingNow([]);setKeywords([]);setSel({});setEdits({});}}
+      <button onClick={()=>{setResult(null);setTrendData(null);setTrendingNow([]);setKeywords([]);setSel({});setEdits({});setTimestamps(null);}}
         style={{fontSize:12,padding:"5px 14px",borderRadius:6,border:`1px solid ${C.bd}`,background:C.sf,color:C.txM,cursor:"pointer"}}>다시 생성</button>
     </div>
+
+    {/* Timestamp Section */}
+    {timestamps && showTimestamps && <div style={{marginBottom:14,borderRadius:14,border:"1px solid rgba(139,92,246,0.3)",background:"rgba(139,92,246,0.04)",overflow:"hidden"}}>
+      <div style={{padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid rgba(139,92,246,0.15)"}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#8B5CF6"}}>타임스탬프 ({timestamps.length}개)</div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={generateTimestamps} disabled={tsLoading} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(139,92,246,0.3)",background:"transparent",color:"#8B5CF6",cursor:"pointer",fontWeight:600}}>
+            {tsLoading ? "생성 중..." : "재생성"}</button>
+          <button onClick={copyTimestamps} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(139,92,246,0.3)",background:tsCopied?"#8B5CF6":"transparent",color:tsCopied?"#fff":"#8B5CF6",cursor:"pointer",fontWeight:600}}>
+            {tsCopied ? "복사됨" : "복사"}</button>
+        </div>
+      </div>
+      <div style={{padding:"10px 18px 14px"}}>
+        {timestamps.map((t, i) => <div key={i} style={{padding:"6px 0",borderBottom:i<timestamps.length-1?"1px solid rgba(139,92,246,0.08)":"none",display:"flex",gap:10,alignItems:"flex-start"}}>
+          <span style={{fontSize:13,fontWeight:700,color:"#8B5CF6",flexShrink:0,fontVariantNumeric:"tabular-nums",minWidth:36}}>{t.time}</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:600,color:C.tx,lineHeight:1.5}}>{t.title}</div>
+            {t.summary && <div style={{fontSize:11,color:C.txD,marginTop:2,lineHeight:1.4}}>{t.summary}</div>}
+          </div>
+        </div>)}
+        <div style={{marginTop:10,padding:"8px 10px",borderRadius:6,background:"rgba(139,92,246,0.06)",fontSize:11,color:C.txD,lineHeight:1.5}}>
+          예상 영상 길이: <strong style={{color:"#8B5CF6"}}>{Math.floor(predictMinutes(scriptBlocks.reduce((s,b)=>s+(b.text||"").length,0)))}분 {Math.round((predictMinutes(scriptBlocks.reduce((s,b)=>s+(b.text||"").length,0)) % 1) * 60)}초</strong>
+        </div>
+      </div>
+    </div>}
 
     {/* Tags */}
     {result.tags?.length > 0 && <div style={{background:C.sf,borderRadius:14,border:`1px solid ${C.bd}`,padding:"18px 22px",marginBottom:14}}>
