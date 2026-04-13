@@ -809,12 +809,11 @@ export function VisualTab({ script, blocks, sessionId, config, onSave }) {
             })}
             {/* 인라인: 사용 수동 자료 */}
             {usedResources.map(r => {
-              const rt = RES_TYPES.find(t=>t.value===r.type) || RES_TYPES[3];
-              return <div key={`inline-res-${r.id}`} style={{margin:"2px 16px 4px",padding:"8px 12px",borderRadius:8,
-                border:`1px solid ${rt.color}44`,background:`${rt.color}0a`,display:"flex",alignItems:"flex-start",gap:8}}>
-                <span style={{fontSize:11,color:rt.color,fontWeight:700,flexShrink:0}}>{rt.label.split(" ")[0]}</span>
+              return <div key={`inline-res-${r.id}`} style={{margin:"2px 16px 4px",padding:"10px 14px",borderRadius:8,
+                border:"1px solid rgba(249,115,22,0.4)",background:"rgba(249,115,22,0.06)",display:"flex",alignItems:"flex-start",gap:8}}>
+                <span style={{fontSize:13,color:"#F97316",fontWeight:700,flexShrink:0}}>📎</span>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:12,fontWeight:600,color:rt.color}}>{r.text}</div>
+                  <div style={{fontSize:13,fontWeight:600,color:"#F97316",lineHeight:1.6}}>{r.text}</div>
                   <span style={{fontSize:9,padding:"1px 4px",borderRadius:3,background:"rgba(249,115,22,0.15)",color:"#F97316",fontWeight:600}}>수동 추가</span>
                 </div>
               </div>;
