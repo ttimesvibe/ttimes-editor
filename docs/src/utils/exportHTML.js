@@ -173,6 +173,37 @@ export function generateExportHTML(data) {
         </div>`;
       }).join("\n");
     }
+    // 수동 자료 카드
+    if (vc.manualResources?.length > 0) {
+      const RES_LABELS = { image: "🖼 이미지", video: "🎬 영상", data: "📊 데이터", etc: "📌 기타" };
+      html += `<h4>📎 수동 자료 (${vc.manualResources.length}건)</h4>`;
+      html += vc.manualResources.map(r => {
+        const vd = vc.verdicts?.[`res-${r.id}`];
+        const vdLabel = vd === "use" ? "✅ 사용" : vd === "discard" ? "❌ 폐기" : "";
+        return `<div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span>${RES_LABELS[r.type] || r.type} <strong>${esc(r.text)}</strong>
+            <span class="badge" style="background:rgba(249,115,22,0.15);color:#F97316;margin-left:6px">수동 추가</span></span>
+            <span style="font-size:12px;color:${vd === "use" ? "#059669" : vd === "discard" ? "#DC2626" : "#888"}">${vdLabel}</span>
+          </div>
+          <div style="font-size:12px;color:#888;margin-top:4px">블록 #${r.block_index ?? "?"} · ${esc(r.speaker || "")}</div>
+        </div>`;
+      }).join("\n");
+    }
+    // 형광펜 마커 요약
+    if (vc.visualMarkers && Object.keys(vc.visualMarkers).length > 0) {
+      const VMARKER_COLORS = { yellow: "#D97706", blue: "#2563EB", cyan: "#0891B2", red: "#DC2626", pink: "#DB2777" };
+      html += `<h4>🖍 형광펜 마킹 (${Object.keys(vc.visualMarkers).length}건)</h4>`;
+      html += Object.entries(vc.visualMarkers).map(([key, m]) => {
+        const color = VMARKER_COLORS[m.color] || "#888";
+        const rangeStr = (m.ranges || []).map(r => `블록#${r.blockIdx} (${r.s}~${r.e})`).join(", ");
+        return `<div class="card" style="border-left:4px solid ${color}">
+          <span style="font-size:12px;color:${color};font-weight:600">${m.color}</span>
+          <span style="font-size:12px;color:#666;margin-left:8px">${esc(key)}</span>
+          <div style="font-size:11px;color:#888;margin-top:2px">${rangeStr}</div>
+        </div>`;
+      }).join("\n");
+    }
     if (html) visualSection = section("📊 자료 & 그래픽 가이드", html);
   }
 

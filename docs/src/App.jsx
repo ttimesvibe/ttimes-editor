@@ -1528,7 +1528,7 @@ export default function App() {
                 <div onClick={e=>e.stopPropagation()} style={{margin:"0 16px 10px",padding:12,borderRadius:10,
                   border:`1px solid ${C.hBd}`,background:"rgba(168,85,247,0.06)"}}>
                   <div style={{display:"flex",gap:6,marginBottom:8}}>
-                    {[["A1","강조자막"],["B2","용어 설명"],["C_user1","자료"]].map(([t,l])=>
+                    {[["A1","강조자막"],["B2","용어 설명"]].map(([t,l])=>
                       <button key={t} onClick={()=>setAddForm(f=>({...f,type:t}))}
                         style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,cursor:"pointer",
                           border:`1px solid ${addForm.type===t?C.hBd:"transparent"}`,
