@@ -9,6 +9,7 @@ import { parseDocxWithTrackChanges } from "./utils/docxParser.js";
 import { calcRegression, tsToSeconds, secondsToDisplay, calcDuration, parseBlocks, splitChunks, chunkToText, chunkCtx } from "./utils/lengthModel.js";
 import { findPositions, getCorrectedText } from "./utils/diffRenderer.js";
 import { _savedTheme, C, FN, applyTheme, MARKER_COLORS_LIGHT, MARKER_COLORS_DARK, setMarkerColors } from "./utils/styles.js";
+import { generateExportHTML } from "./utils/exportHTML.js";
 
 // ── Components ──
 import { Badge, Progress, MarkedText, TypeBadge, BlockView, ReviewBlock, ScriptEditBlock, CorrectionRightBlock } from "./components/BlockComponents.jsx";
@@ -76,6 +77,7 @@ export default function App() {
   const [matchingMode, setMatchingMode] = useState(null); // { key: "blockIdx-subtitle", color: "yellow" } or null
   const [showSessions, setShowSessions] = useState(false); // 세션 목록 모달
   const [bookmark, setBookmark] = useState(null); // 책갈피 블록 인덱스
+  const [exportCache, setExportCache] = useState({}); // { highlight, setgen, visual, modify }
 
   const lRef = useRef(null), rRef = useRef(null), syncing = useRef(false), bEls = useRef({});
 
@@ -83,7 +85,7 @@ export default function App() {
   useEffect(() => {
     if (blocks.length === 0) return;
     try {
-      localStorage.setItem("te_session", JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, tab, gReady, bookmark }));
+      localStorage.setItem("te_session", JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, tab, gReady, bookmark, exportCache }));
     } catch {}
   }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, tab, gReady, bookmark]);
 
@@ -121,6 +123,7 @@ export default function App() {
             setHlStats(s.hlStats || null); setHlVerdicts(s.hlVerdicts || {}); setHlEdits(s.hlEdits || {}); setHlMarkers(s.hlMarkers || {}); setScriptEdits(s.scriptEdits || {}); setReviewData(s.reviewData || null);
             setFn(s.fn || ""); setTab(s.tab || "correction"); setGReady(s.gReady || false);
             if (s.bookmark != null) setBookmark(s.bookmark);
+            if (s.exportCache) setExportCache(s.exportCache);
           }
         }
       } catch {}
@@ -266,13 +269,31 @@ export default function App() {
     finally { setSaving(false); }
   }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, cfg, sessionId]);
 
+  // ── 내보내기 ──
+  const handleExport = useCallback(() => {
+    const data = {
+      filename: fn,
+      exportedAt: new Date().toISOString(),
+      blocks, diffs, anal, hl, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData,
+      exportCache,
+    };
+    const html = generateExportHTML(data);
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fn || "편집가이드"}_${new Date().toISOString().slice(0,10)}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [fn, blocks, diffs, anal, hl, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, exportCache]);
+
   // 새 파일 시작
   const handleReset = useCallback(() => {
     localStorage.removeItem("te_session");
     if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); autoSaveTimer.current = null; }
     setAutoSaveStatus(""); setLastSavedSnapshot("");
     setBlocks([]); setAnal(null); setDiffs([]); setHl([]); setHlStats(null); setHlVerdicts({}); setHlEdits({}); setHlMarkers({}); setScriptEdits({}); setReviewData(null);
-    setFn(""); setTab("correction"); setGReady(false); setBookmark(null);
+    setFn(""); setTab("correction"); setGReady(false); setBookmark(null); setExportCache({});
     setTermReview(false); setReadOnly(false); setSessionId(null); sessionIdRef.current = null;
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
@@ -754,6 +775,12 @@ export default function App() {
           <button onClick={()=>{setSessionId(null);}} title="새 공유 링크 생성"
             style={{padding:"5px 8px",borderRadius:6,border:`1px solid ${C.bd}`,
               background:"transparent",color:C.txM,fontSize:11,cursor:"pointer"}}>+ 새 링크</button>
+        )}
+        {hasData && (
+          <button onClick={handleExport} title="HTML로 내보내기" style={{padding:"5px 10px",borderRadius:6,
+            border:`1px solid ${C.bd}`,background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>
+            📥 내보내기
+          </button>
         )}
         {hasData && (
           <button onClick={handleReset} title="새 파일 시작" style={{padding:"5px 10px",borderRadius:6,
@@ -1670,6 +1697,7 @@ export default function App() {
         sessionId={sessionId}
         config={cfg}
         onSave={(data) => {
+          setExportCache(prev => ({ ...prev, highlight: data }));
           if (sessionId) apiSaveTab(sessionId, "highlight", data, cfg, fn).catch(()=>{});
         }}
       />}
@@ -1691,6 +1719,7 @@ export default function App() {
         config={cfg}
         keywords={anal?.overview?.keywords || []}
         onSave={(data) => {
+          setExportCache(prev => ({ ...prev, setgen: data }));
           if (sessionId) apiSaveTab(sessionId, "setgen", data, cfg, fn).catch(()=>{});
         }}
       />}
@@ -1709,6 +1738,7 @@ export default function App() {
         sessionId={sessionId}
         config={cfg}
         onSave={(data) => {
+          setExportCache(prev => ({ ...prev, visual: data }));
           if (sessionId) apiSaveTab(sessionId, "visual", data, cfg, fn).catch(()=>{});
         }}
       />}
@@ -1718,6 +1748,7 @@ export default function App() {
         sessionId={sessionId}
         config={cfg}
         onSave={(data) => {
+          setExportCache(prev => ({ ...prev, modify: data }));
           if (sessionId) apiSaveTab(sessionId, "modify", data, cfg, fn).catch(()=>{});
         }}
       />}
