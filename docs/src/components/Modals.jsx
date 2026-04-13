@@ -131,6 +131,36 @@ export function SettingsModal({ config, onSave, onClose }) {
   const [f, setF] = useState(config.fillers.join(", "));
   const [t, setT] = useState(Object.entries(config.customTerms).map(([k,v])=>`${k}=${v.join(",")}`).join("\n"));
   const [cs, setCs] = useState(config.chunkSize);
+  // 비밀번호 변경
+  const [pwCur, setPwCur] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwMsg, setPwMsg] = useState(null); // { type: "success"|"error", text }
+  const handleChangePw = async () => {
+    setPwMsg(null);
+    if (pwNew.length < 8) { setPwMsg({ type: "error", text: "새 비밀번호는 8자 이상이어야 합니다." }); return; }
+    if (pwNew !== pwConfirm) { setPwMsg({ type: "error", text: "새 비밀번호가 일치하지 않습니다." }); return; }
+    setPwLoading(true);
+    try {
+      const token = localStorage.getItem("ttimes_token");
+      const res = await fetch("https://auth.ttimes6000.workers.dev/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ currentPassword: pwCur, newPassword: pwNew }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.token) localStorage.setItem("ttimes_token", data.token);
+        setPwMsg({ type: "success", text: "비밀번호가 변경되었습니다." });
+        setPwCur(""); setPwNew(""); setPwConfirm("");
+      } else {
+        setPwMsg({ type: "error", text: data.error || "비밀번호 변경 실패" });
+      }
+    } catch {
+      setPwMsg({ type: "error", text: "서버에 연결할 수 없습니다." });
+    } finally { setPwLoading(false); }
+  };
   // 단어장 state — 삭제/수정 즉시 반영
   const [dictList, setDictList] = useState(() => {
     const d = loadDictionary();
@@ -259,6 +289,23 @@ export function SettingsModal({ config, onSave, onClose }) {
           }} style={{padding:"6px 12px",borderRadius:6,border:"1px solid rgba(239,68,68,0.3)",
             background:"transparent",color:"#EF4444",fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>초기화</button>
         </div>
+      </div>
+      <div style={{marginBottom:20,padding:14,background:"rgba(0,0,0,0.2)",borderRadius:10,border:`1px solid ${C.bd}`}}>
+        <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:10}}>🔒 비밀번호 변경</label>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <input type="password" value={pwCur} onChange={e=>setPwCur(e.target.value)} placeholder="현재 비밀번호" style={iS}/>
+          <input type="password" value={pwNew} onChange={e=>setPwNew(e.target.value)} placeholder="새 비밀번호 (8자 이상)" style={iS}/>
+          <input type="password" value={pwConfirm} onChange={e=>setPwConfirm(e.target.value)} placeholder="새 비밀번호 확인" style={iS}/>
+        </div>
+        {pwMsg && <div style={{marginTop:8,padding:"8px 12px",borderRadius:6,fontSize:12,
+          background:pwMsg.type==="success"?"rgba(34,197,94,0.1)":"rgba(239,68,68,0.1)",
+          border:`1px solid ${pwMsg.type==="success"?"rgba(34,197,94,0.2)":"rgba(239,68,68,0.2)"}`,
+          color:pwMsg.type==="success"?C.ok:"#EF4444"}}>{pwMsg.text}</div>}
+        <button onClick={handleChangePw} disabled={pwLoading||!pwCur||!pwNew||!pwConfirm}
+          style={{marginTop:8,padding:"7px 16px",borderRadius:6,border:"none",
+            background:pwLoading?"rgba(74,108,247,0.4)":"rgba(74,108,247,0.8)",
+            color:"#fff",fontSize:12,fontWeight:600,cursor:pwLoading?"not-allowed":"pointer",fontFamily:FN}}>
+          {pwLoading?"변경 중...":"비밀번호 변경"}</button>
       </div>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={{padding:"8px 20px",borderRadius:6,border:`1px solid ${C.bd}`,

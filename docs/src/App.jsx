@@ -512,7 +512,7 @@ function AuthenticatedApp({ authUser, onLogout }) {
       const hlChunks = [];
       let currentChunk = [];
       let currentLen = 0;
-      for (const b of blocks) {
+      for (const b of correctedBlocksFull) {
         if (currentLen + b.text.length > HIGHLIGHT_CHUNK_SIZE && currentChunk.length > 0) {
           hlChunks.push(currentChunk);
           // 오버랩: 마지막 5블록을 다음 청크에 포함 (맥락 연결)
@@ -577,7 +577,7 @@ function AuthenticatedApp({ authUser, onLogout }) {
       if (isSingleChunk) {
         // 단일 청크: 한 번에 Editor 호출
         setProg({p: 55, l: "Pass 2: 강조자막 검증·선별 중 (Editor Agent)..."});
-        const editResult = await apiHighlightsEdit(blocks, anal, allDraftHighlights, cfg);
+        const editResult = await apiHighlightsEdit(correctedBlocksFull, anal, allDraftHighlights, cfg);
         allFinalHighlights = editResult.highlights || [];
         allRemoved = editResult.removed || [];
       } else {
@@ -627,7 +627,7 @@ function AuthenticatedApp({ authUser, onLogout }) {
       autoSaveToKV({ hl: allFinalHighlights, hlStats: finalStats });
     } catch(e) { setErr(e.message); }
     finally { setGBusy(false); }
-  },[blocks,anal,cfg,autoSaveToKV]);
+  },[blocks,correctedBlocksFull,anal,cfg,autoSaveToKV]);
 
   // ── 부분 강조자막 생성 (텍스트 드래그 → 해당 블록만 생성) ──
   const handlePartialGenerate = useCallback(async (blockIdx, selectedText) => {
