@@ -161,14 +161,11 @@ export function SettingsModal({ config, onSave, onClose }) {
       setPwMsg({ type: "error", text: "서버에 연결할 수 없습니다." });
     } finally { setPwLoading(false); }
   };
-  // 단어장 state — 삭제/수정 즉시 반영
-  const [dictList, setDictList] = useState(() => {
+  // 단어장 — 읽기 전용 (관리는 어드민 페이지에서)
+  const [dictList] = useState(() => {
     const d = loadDictionary();
     return d.map(t => typeof t === "string" ? t : t.correct || t.wrong).filter(Boolean);
   });
-  const [editIdx, setEditIdx] = useState(-1);
-  const [editVal, setEditVal] = useState("");
-  const [newDictWord, setNewDictWord] = useState("");
   const save = () => {
     const ct = {};
     t.split("\n").filter(Boolean).forEach(l => { const [c,w] = l.split("="); if(c&&w) ct[c.trim()] = w.split(",").map(s=>s.trim()); });
@@ -191,11 +188,7 @@ export function SettingsModal({ config, onSave, onClose }) {
               color:m===v?C.ac:C.txM,fontSize:13,fontWeight:600,cursor:"pointer"}}>{l}</button>)}
         </div>
       </div>
-      {m==="live" && <div style={{marginBottom:16}}>
-        <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>Cloudflare Worker URL</label>
-        <input value={u} onChange={e=>setU(e.target.value)} placeholder="https://ttimes-editor.xxx.workers.dev" style={iS}/>
-        <div style={{fontSize:11,color:C.txD,marginTop:4}}>ttimes-editor Worker의 전체 URL</div>
-      </div>}
+      {/* Worker URL은 config.js 고정값 사용 */}
       <div style={{marginBottom:16}}>
         <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:6}}>필러 단어 (쉼표 구분)</label>
         <input value={f} onChange={e=>setF(e.target.value)} style={iS}/>
@@ -212,83 +205,25 @@ export function SettingsModal({ config, onSave, onClose }) {
       </div>
       <div style={{marginBottom:20,padding:14,background:"rgba(0,0,0,0.2)",borderRadius:10,border:`1px solid ${C.bd}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <label style={{fontSize:12,color:C.txM,fontWeight:600}}>📚 팀 단어장 (정답 표기)</label>
+          <label style={{fontSize:12,color:C.txM,fontWeight:600}}>📚 팀 단어장 (읽기 전용)</label>
           <span style={{fontSize:12,color:C.ac,fontWeight:600}}>{dictList.length}건</span>
         </div>
         <div style={{fontSize:11,color:C.txD,marginBottom:10}}>
-          정답 표기만 등록하면, AI가 발음 유사·문맥 유추로 오인식을 자동 매칭합니다.
-          <br/>클릭하여 수정, × 버튼으로 삭제할 수 있습니다.
+          단어장 추가/삭제는 어드민 페이지에서만 가능합니다.
         </div>
-        {dictList.length > 0 && (
-          <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:10,maxHeight:160,overflowY:"auto",
+        {dictList.length > 0 ? (
+          <div style={{display:"flex",flexWrap:"wrap",gap:4,maxHeight:160,overflowY:"auto",
             padding:6,background:"rgba(0,0,0,0.15)",borderRadius:8}}>
             {dictList.map((word, i) => (
-              editIdx === i ? (
-                <input key={i} autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)}
-                  onBlur={()=>{
-                    const v = editVal.trim();
-                    if(v && v !== word) {
-                      const nd = [...dictList]; nd[i] = v; setDictList(nd);
-                      saveDictionaryToServer(nd, config);
-                    }
-                    setEditIdx(-1);
-                  }}
-                  onKeyDown={e=>{
-                    if(e.key==="Enter") e.target.blur();
-                    if(e.key==="Escape") { setEditIdx(-1); }
-                  }}
-                  style={{padding:"3px 8px",borderRadius:12,border:`1px solid ${C.ac}`,
-                    background:"rgba(74,108,247,0.2)",color:C.tx,fontSize:12,fontFamily:FN,
-                    outline:"none",minWidth:60,width:Math.max(60, editVal.length*10)}}/>
-              ) : (
-                <span key={i} style={{display:"inline-flex",alignItems:"center",gap:3,padding:"3px 8px",
-                  borderRadius:12,background:"rgba(74,108,247,0.12)",color:C.ac,fontSize:12,fontWeight:500,
-                  cursor:"pointer"}}
-                  onClick={()=>{ setEditIdx(i); setEditVal(word); }}>
-                  {word}
-                  <button onClick={async(e)=>{
-                    e.stopPropagation();
-                    const nd = dictList.filter((_,j)=>j!==i);
-                    setDictList(nd);
-                    await saveDictionaryToServer(nd, config);
-                  }} style={{background:"none",border:"none",color:C.txD,cursor:"pointer",fontSize:11,
-                    padding:0,lineHeight:1,marginLeft:1}} title="삭제">×</button>
-                </span>
-              )
+              <span key={i} style={{padding:"3px 8px",borderRadius:12,
+                background:"rgba(74,108,247,0.12)",color:C.ac,fontSize:12,fontWeight:500}}>
+                {word}
+              </span>
             ))}
           </div>
+        ) : (
+          <div style={{fontSize:12,color:C.txD,padding:8,textAlign:"center"}}>등록된 단어가 없습니다.</div>
         )}
-        <div style={{display:"flex",gap:6}}>
-          <input value={newDictWord} onChange={e=>setNewDictWord(e.target.value)}
-            placeholder="새 단어 추가 (Enter)" style={{...iS,flex:1,fontSize:12}}
-            onKeyDown={async e=>{
-              if(e.key==="Enter" && newDictWord.trim()){
-                const w = newDictWord.trim();
-                if(!dictList.includes(w)){
-                  const nd = [...dictList, w]; setDictList(nd);
-                  await saveDictionaryToServer(nd, config);
-                }
-                setNewDictWord("");
-              }
-            }}/>
-          <button onClick={async()=>{
-            if(!newDictWord.trim()) return;
-            const w = newDictWord.trim();
-            if(!dictList.includes(w)){
-              const nd = [...dictList, w]; setDictList(nd);
-              await saveDictionaryToServer(nd, config);
-            }
-            setNewDictWord("");
-          }} style={{padding:"6px 14px",borderRadius:6,border:"none",background:C.ac,color:"#fff",
-            fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>추가</button>
-          <button onClick={async ()=>{
-            if(confirm("단어장을 초기화하면 저장된 모든 교정 용어가 삭제됩니다.\n팀 전체 단어장이 초기화됩니다. 계속할까요?")) {
-              setDictList([]);
-              await saveDictionaryToServer([], config);
-            }
-          }} style={{padding:"6px 12px",borderRadius:6,border:"1px solid rgba(239,68,68,0.3)",
-            background:"transparent",color:"#EF4444",fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>초기화</button>
-        </div>
       </div>
       <div style={{marginBottom:20,padding:14,background:"rgba(0,0,0,0.2)",borderRadius:10,border:`1px solid ${C.bd}`}}>
         <label style={{fontSize:12,color:C.txM,fontWeight:600,display:"block",marginBottom:10}}>🔒 비밀번호 변경</label>
