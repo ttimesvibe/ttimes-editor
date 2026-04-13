@@ -8,7 +8,7 @@ import { delay, apiCall, apiSaveSession, apiLoadSession, apiAnalyze, apiCorrect,
 import { parseDocxWithTrackChanges } from "./utils/docxParser.js";
 import { calcRegression, tsToSeconds, secondsToDisplay, calcDuration, parseBlocks, splitChunks, chunkToText, chunkCtx } from "./utils/lengthModel.js";
 import { findPositions, getCorrectedText } from "./utils/diffRenderer.js";
-import { _savedTheme, C, FN, applyTheme, MARKER_COLORS_LIGHT, MARKER_COLORS_DARK, setMarkerColors } from "./utils/styles.js";
+import { _savedTheme, C, FN, applyTheme, MARKER_COLORS, MARKER_COLORS_LIGHT, MARKER_COLORS_DARK, setMarkerColors } from "./utils/styles.js";
 import { generateExportHTML } from "./utils/exportHTML.js";
 
 // ── Components ──
