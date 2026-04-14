@@ -173,6 +173,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
   const [hlVerdicts, setHlVerdicts] = useState({}); // { "blockIndex-subtitle": "use"|"recommend"|"discard"|null }
   const [hlEdits, setHlEdits] = useState({}); // { "blockIndex-subtitle": "수정된 텍스트" }
   const [scriptEdits, setScriptEdits] = useState({}); // { blockIndex: "수동 편집된 텍스트" } — 1.5단계
+  const [blockDeletions, setBlockDeletions] = useState({}); // { blockIndex: [{s, e}, ...] } — 수정본 삭제선
   const [subtitleCache, setSubtitleCache] = useState(null); // AI 자막 포맷팅 결과 캐시
   const [subtitleResult, setSubtitleResult] = useState(null); // 2패널 표시용 자막 결과
   const [reviewData, setReviewData] = useState(null); // 0차: { paragraphs, hasTrackChanges, deletedBlockIndices, duration }
@@ -213,9 +214,9 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
   useEffect(() => {
     if (blocks.length === 0) return;
     try {
-      localStorage.setItem("te_session", JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, tab, gReady, bookmark, exportCache }));
+      localStorage.setItem("te_session", JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn, tab, gReady, bookmark, exportCache }));
     } catch {}
-  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, tab, gReady, bookmark]);
+  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn, tab, gReady, bookmark]);
 
   // ── 앱 마운트 시: URL 공유 파라미터 또는 localStorage 복원 ──
   useEffect(() => {
@@ -235,7 +236,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
             setDiffs(data.diffs || []);
             setHl(data.hl || []);
             setHlStats(data.hlStats || null);
-            setHlVerdicts(data.hlVerdicts || {}); setHlEdits(data.hlEdits || {}); setHlMarkers(data.hlMarkers || {}); setScriptEdits(data.scriptEdits || {}); setReviewData(data.reviewData || null);
+            setHlVerdicts(data.hlVerdicts || {}); setHlEdits(data.hlEdits || {}); setHlMarkers(data.hlMarkers || {}); setScriptEdits(data.scriptEdits || {}); setBlockDeletions(data.blockDeletions || {}); setReviewData(data.reviewData || null);
             setFn(data.fn || "");
             setGReady((data.hl?.length > 0));
             setTab(data.hl?.length > 0 ? "guide" : data.reviewData ? "review" : "correction");
@@ -249,7 +250,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
             results.forEach((r, i) => { if (r.status === "fulfilled" && r.value) td[tabs[i]] = r.value; });
             const c = td.correction || {};
             setBlocks(c.blocks || []); setAnal(c.anal || null); setDiffs(c.diffs || []);
-            setScriptEdits(c.scriptEdits || {});
+            setScriptEdits(c.scriptEdits || {}); setBlockDeletions(c.blockDeletions || {});
             if (td.review) setReviewData(td.review.reviewData || td.review);
             const h = td.highlight || {};
             setHl(h.hl || []); setHlStats(h.hlStats || null);
@@ -284,7 +285,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           if (s.blocks?.length > 0) {
             setBlocks(s.blocks); setAnal(s.anal || null);
             setDiffs(s.diffs || []); setHl(s.hl || []);
-            setHlStats(s.hlStats || null); setHlVerdicts(s.hlVerdicts || {}); setHlEdits(s.hlEdits || {}); setHlMarkers(s.hlMarkers || {}); setScriptEdits(s.scriptEdits || {}); setReviewData(s.reviewData || null);
+            setHlStats(s.hlStats || null); setHlVerdicts(s.hlVerdicts || {}); setHlEdits(s.hlEdits || {}); setHlMarkers(s.hlMarkers || {}); setScriptEdits(s.scriptEdits || {}); setBlockDeletions(s.blockDeletions || {}); setReviewData(s.reviewData || null);
             setFn(s.fn || ""); setTab(s.tab || "correction"); setGReady(s.gReady || false);
             if (s.bookmark != null) setBookmark(s.bookmark);
             if (s.exportCache) setExportCache(s.exportCache);
@@ -370,7 +371,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     savingInProgress.current = true;
     try {
       const payload = {
-        blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn,
+        blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn,
         ...overrideData,
       };
       if (sessionId) payload.id = sessionId;
@@ -385,7 +386,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     } finally {
       savingInProgress.current = false;
     }
-  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, cfg, sessionId, tab, updateStepProgress]);
+  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn, cfg, sessionId, tab, updateStepProgress]);
 
   // ── 3분 디바운스 자동 저장 (변경 감지 → 3분 후 /autosave 호출) ──
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
@@ -393,7 +394,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
   useEffect(() => {
     if (cfg.apiMode === "mock" || !cfg.workerUrl) return;
     if (!blocks || blocks.length === 0) return;
-    const currentSnapshot = JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn });
+    const currentSnapshot = JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn });
     if (currentSnapshot === lastSavedSnapshot) return;
 
     setAutoSaveStatus("pending");
@@ -404,7 +405,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
       savingInProgress.current = true;
       setAutoSaveStatus("saving");
       try {
-        const session = { blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, savedAt: new Date().toISOString() };
+        const session = { blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn, savedAt: new Date().toISOString() };
         const curId = sessionIdRef.current;
         const id = curId || (Date.now().toString(36) + Math.random().toString(36).substring(2, 8));
         const _tk = localStorage.getItem("ttimes_token");
@@ -433,12 +434,12 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     }, 3 * 60 * 1000); // 3분
 
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, lastSavedSnapshot, cfg]);
+  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn, lastSavedSnapshot, cfg]);
 
   const handleShare = useCallback(async () => {
     setSaving(true); setErr(null);
     try {
-      const payload = { blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn };
+      const payload = { blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn };
       // sessionId가 있으면 같은 ID로 덮어쓰기 (업데이트)
       if (sessionId) payload.id = sessionId;
       const id = await apiSaveSession(payload, cfg);
@@ -449,11 +450,11 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
       // URL에 세션 ID 반영 (브라우저 주소창)
       window.history.replaceState({}, "", `${window.location.pathname}?s=${id}`);
       // 공유 저장 후 자동 저장 불필요하게 트리거되지 않도록 스냅샷 갱신
-      setLastSavedSnapshot(JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn }));
+      setLastSavedSnapshot(JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn }));
       if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); setAutoSaveStatus(""); }
     } catch (e) { setErr(e.message); }
     finally { setSaving(false); }
-  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, fn, cfg, sessionId]);
+  }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn, cfg, sessionId]);
 
   // ── 내보내기 ──
   const handleExport = useCallback(async () => {
@@ -476,7 +477,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     const data = {
       filename: fn,
       exportedAt: new Date().toISOString(),
-      blocks, diffs, anal, hl, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData,
+      blocks, diffs, anal, hl, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData,
       exportCache: cache,
     };
     const html = generateExportHTML(data);
@@ -487,14 +488,14 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     a.download = `${fn || "편집가이드"}_${new Date().toISOString().slice(0,10)}.html`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [fn, blocks, diffs, anal, hl, hlVerdicts, hlEdits, hlMarkers, scriptEdits, reviewData, exportCache, sessionId, cfg]);
+  }, [fn, blocks, diffs, anal, hl, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, exportCache, sessionId, cfg]);
 
   // 새 파일 시작
   const handleReset = useCallback(() => {
     localStorage.removeItem("te_session");
     if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); autoSaveTimer.current = null; }
     setAutoSaveStatus(""); setLastSavedSnapshot("");
-    setBlocks([]); setAnal(null); setDiffs([]); setHl([]); setHlStats(null); setHlVerdicts({}); setHlEdits({}); setHlMarkers({}); setScriptEdits({}); setReviewData(null);
+    setBlocks([]); setAnal(null); setDiffs([]); setHl([]); setHlStats(null); setHlVerdicts({}); setHlEdits({}); setHlMarkers({}); setScriptEdits({}); setBlockDeletions({}); setReviewData(null);
     setFn(""); setTab("correction"); setGReady(false); setBookmark(null); setExportCache({});
     setTermReview(false); setReadOnly(false); setSessionId(null); sessionIdRef.current = null;
     window.history.replaceState({}, "", window.location.pathname);
@@ -629,15 +630,27 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     setAddForm({ subtitle: "", type: "A1" });
   }, [addingAt, addForm, blocks]);
 
+  // ── 삭제선 적용 헬퍼 ──
+  const applyDeletions = useCallback((text, dels) => {
+    if (!dels || dels.length === 0) return text;
+    const sorted = [...dels].sort((a, b) => b.s - a.s); // reverse order to not shift indices
+    let result = text;
+    for (const d of sorted) {
+      result = result.slice(0, d.s) + result.slice(d.e);
+    }
+    return result;
+  }, []);
+
   // ── 교정된 스크립트/블록 (탭 공유용 useMemo) ── handleGuide보다 앞에 선언 필수
   const correctedScript = useMemo(() => {
     if (blocks.length === 0) return "";
     return blocks.map(b => {
       const se = scriptEdits[b.index];
-      if (se !== undefined) return se;
-      return getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index));
+      let text = se !== undefined ? se : getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index));
+      text = applyDeletions(text, blockDeletions[b.index]);
+      return text;
     }).join("\n");
-  }, [blocks, diffs, scriptEdits]);
+  }, [blocks, diffs, scriptEdits, blockDeletions, applyDeletions]);
 
   const correctedBlocks = useMemo(() =>
     blocks.map(b => ({ id: b.index, speaker: b.speaker, time: b.timestamp,
@@ -1180,6 +1193,23 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
                 pos={findPositions(b.text,dm[idx])} onClick={scrollTo}
                 bRef={el=>{if(el)bEls.current[`r${idx}`]=el}}
                 correctedText={corrected} editedVal={editedVal} isEdited={isEdited}
+                deletions={blockDeletions[idx]}
+                onAddDeletion={(s, e) => {
+                  setBlockDeletions(prev => {
+                    const existing = prev[idx] || [];
+                    return {...prev, [idx]: [...existing, {s, e}]};
+                  });
+                  setSubtitleCache(null); setSubtitleResult(null);
+                }}
+                onRemoveDeletion={(s, e) => {
+                  setBlockDeletions(prev => {
+                    const existing = prev[idx] || [];
+                    const filtered = existing.filter(d => d.s !== s || d.e !== e);
+                    if (filtered.length === 0) { const n = {...prev}; delete n[idx]; return n; }
+                    return {...prev, [idx]: filtered};
+                  });
+                  setSubtitleCache(null); setSubtitleResult(null);
+                }}
                 onSave={val => {
                   if (val !== null) setScriptEdits(prev=>({...prev,[idx]:val}));
                   else setScriptEdits(prev=>{const n={...prev};delete n[idx];return n;});
@@ -1195,7 +1225,8 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           const origChars = blocks.reduce((s, b) => s + b.text.replace(/\s/g, "").length, 0);
           const corrChars = blocks.reduce((s, b) => {
             const idx = b.index;
-            const t = scriptEdits[idx] !== undefined ? scriptEdits[idx] : getCorrectedText(b.text, dm[idx]);
+            let t = scriptEdits[idx] !== undefined ? scriptEdits[idx] : getCorrectedText(b.text, dm[idx]);
+            t = applyDeletions(t, blockDeletions[idx]);
             return s + t.replace(/\s/g, "").length;
           }, 0);
           const origMs = Math.ceil(origChars / 200); // 원고지 매수 (200자 기준)
@@ -1226,8 +1257,9 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
         const handleCopyRaw = (e) => {
           const lines = blocks.map(b => {
             const idx = b.index;
-            if (scriptEdits[idx] !== undefined) return scriptEdits[idx];
-            return getCorrectedText(b.text, dm[idx]);
+            let t = scriptEdits[idx] !== undefined ? scriptEdits[idx] : getCorrectedText(b.text, dm[idx]);
+            t = applyDeletions(t, blockDeletions[idx]);
+            return t;
           });
           const text = lines.join("\n\n");
           try { navigator.clipboard.writeText(text); } catch {
@@ -1347,9 +1379,10 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           try {
             const allTexts = blocks.map(b => {
               const idx = b.index;
-              const text = scriptEdits[idx] !== undefined
+              let text = scriptEdits[idx] !== undefined
                 ? scriptEdits[idx]
                 : getCorrectedText(b.text, dm[idx]);
+              text = applyDeletions(text, blockDeletions[idx]);
               const speaker = b.speaker && b.speaker !== "—" ? `[${b.speaker}]` : "";
               return speaker ? `${speaker}\n${text}` : text;
             });
@@ -1988,7 +2021,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           setDiffs(data.diffs || []);
           setHl(data.hl || []);
           setHlStats(data.hlStats || null);
-          setHlVerdicts(data.hlVerdicts || {}); setHlEdits(data.hlEdits || {}); setHlMarkers(data.hlMarkers || {}); setScriptEdits(data.scriptEdits || {}); setReviewData(data.reviewData || null);
+          setHlVerdicts(data.hlVerdicts || {}); setHlEdits(data.hlEdits || {}); setHlMarkers(data.hlMarkers || {}); setScriptEdits(data.scriptEdits || {}); setBlockDeletions(data.blockDeletions || {}); setReviewData(data.reviewData || null);
           setFn(data.fn || "");
           setSessionId(id);
           setGReady((data.hl?.length > 0));

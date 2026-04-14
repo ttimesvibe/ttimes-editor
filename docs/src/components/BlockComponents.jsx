@@ -330,9 +330,10 @@ export function ScriptEditBlock({ block, correctedText, editedVal, isEdited, onS
 }
 
 // ── 1차 교정 탭 우측: 수정본 블록 + ✏️ 인라인 편집 ──
-export function CorrectionRightBlock({ block, pos, active, onClick, bRef, correctedText, editedVal, isEdited, onSave, onRevert }) {
+export function CorrectionRightBlock({ block, pos, active, onClick, bRef, correctedText, editedVal, isEdited, onSave, onRevert, deletions, onAddDeletion, onRemoveDeletion }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const textRef = useRef(null);
   const segs = toSegs(block.text, pos, "right");
   const idx = block.index;
 
@@ -377,6 +378,50 @@ export function CorrectionRightBlock({ block, pos, active, onClick, bRef, correc
   }
 
   const displayText = editedVal !== undefined ? editedVal : null;
+  const dels = deletions || [];
+
+  // 삭제선 범위를 텍스트에 적용해서 렌더링
+  const renderWithDeletions = (text) => {
+    if (dels.length === 0) return <span>{text}</span>;
+    const sorted = [...dels].sort((a, b) => a.s - b.s);
+    const parts = [];
+    let cursor = 0;
+    for (const d of sorted) {
+      if (d.s > cursor) parts.push({ text: text.slice(cursor, d.s), del: false });
+      parts.push({ text: text.slice(d.s, d.e), del: true, s: d.s, e: d.e });
+      cursor = d.e;
+    }
+    if (cursor < text.length) parts.push({ text: text.slice(cursor), del: false });
+    return parts.map((p, i) => p.del
+      ? <span key={i} onClick={e => { e.stopPropagation(); onRemoveDeletion?.(p.s, p.e); }}
+          title="클릭하여 삭제선 취소"
+          style={{ textDecoration: "line-through", textDecorationColor: "#EF4444",
+            background: "rgba(239,68,68,0.12)", color: "#EF4444", padding: "1px 2px",
+            borderRadius: 3, cursor: "pointer" }}>{p.text}</span>
+      : <span key={i}>{p.text}</span>
+    );
+  };
+
+  // 텍스트 선택 → 삭제선 추가
+  const handleStrikethrough = (e) => {
+    e.stopPropagation();
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !textRef.current) return;
+    // 선택 범위가 이 블록 안에 있는지 확인
+    if (!textRef.current.contains(sel.anchorNode) || !textRef.current.contains(sel.focusNode)) return;
+    const fullText = displayText !== null ? displayText : correctedText;
+    // 텍스트 노드에서 오프셋 계산
+    const range = sel.getRangeAt(0);
+    const preRange = document.createRange();
+    preRange.selectNodeContents(textRef.current);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    const startOffset = preRange.toString().length;
+    const selectedText = sel.toString();
+    const endOffset = startOffset + selectedText.length;
+    if (startOffset === endOffset) return;
+    sel.removeAllRanges();
+    onAddDeletion?.(startOffset, endOffset);
+  };
 
   return <div ref={bRef} onClick={() => onClick?.(block.index)}
     style={{padding:"10px 16px",borderLeft:`4px solid ${isEdited?"#22C55E":active?"#A855F7":"transparent"}`,
@@ -389,9 +434,14 @@ export function CorrectionRightBlock({ block, pos, active, onClick, bRef, correc
       <span style={{fontSize:11,color:C.txD,fontFamily:"monospace"}}>{block.timestamp}</span>
       {isEdited && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,marginLeft:6,
         background:"rgba(34,197,94,0.15)",color:"#22C55E"}}>수정됨</span>}
+      {dels.length > 0 && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,marginLeft:6,
+        background:"rgba(239,68,68,0.15)",color:"#EF4444"}}>삭제선 {dels.length}</span>}
       <div style={{marginLeft:"auto",display:"flex",gap:3,opacity:0.5,transition:"opacity 0.15s"}}
         onMouseEnter={e=>e.currentTarget.style.opacity="1"}
         onMouseLeave={e=>e.currentTarget.style.opacity="0.5"}>
+        <button onClick={handleStrikethrough}
+          style={{fontSize:10,color:"#EF4444",background:"none",border:"1px solid rgba(239,68,68,0.3)",borderRadius:4,
+            cursor:"pointer",padding:"1px 6px"}} title="선택 영역에 삭제선 추가">삭제선</button>
         {isEdited && <button onClick={e=>{e.stopPropagation();onRevert()}}
           style={{fontSize:10,color:C.txD,background:"none",border:`1px solid ${C.bd}`,borderRadius:4,
             cursor:"pointer",padding:"1px 6px"}} title="되돌리기">↩</button>}
@@ -400,15 +450,17 @@ export function CorrectionRightBlock({ block, pos, active, onClick, bRef, correc
             cursor:"pointer",padding:"1px 6px"}} title="이 블록 편집">✏️</button>
       </div>
     </div>
-    <div style={{fontSize:14,lineHeight:1.8,color:C.tx,wordBreak:"keep-all"}}>
+    <div ref={textRef} style={{fontSize:14,lineHeight:1.8,color:C.tx,wordBreak:"keep-all",userSelect:"text"}}>
       {displayText !== null
-        ? <span>{displayText}</span>
-        : segs.map((s,i) => {
-            if (s.tp === "filler_applied") return <span key={i}>{s.text}</span>;
-            if (s.tp === "term_correction_applied") return <span key={i}>{s.text}</span>;
-            if (s.tp === "spelling_applied") return <span key={i}>{s.text}</span>;
-            return <span key={i}>{s.text}</span>;
-          })
+        ? renderWithDeletions(displayText)
+        : dels.length > 0
+          ? renderWithDeletions(correctedText)
+          : segs.map((s,i) => {
+              if (s.tp === "filler_applied") return <span key={i}>{s.text}</span>;
+              if (s.tp === "term_correction_applied") return <span key={i}>{s.text}</span>;
+              if (s.tp === "spelling_applied") return <span key={i}>{s.text}</span>;
+              return <span key={i}>{s.text}</span>;
+            })
       }
     </div>
   </div>;

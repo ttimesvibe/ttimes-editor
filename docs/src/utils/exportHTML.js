@@ -5,7 +5,7 @@
 export function generateExportHTML(data) {
   const {
     filename, exportedAt, blocks, diffs, anal, hl, hlVerdicts, hlEdits,
-    hlMarkers, scriptEdits, reviewData, exportCache,
+    hlMarkers, scriptEdits, blockDeletions, reviewData, exportCache,
   } = data;
 
   const date = new Date(exportedAt).toLocaleString("ko-KR", {
@@ -35,17 +35,31 @@ export function generateExportHTML(data) {
   const CAT_LABELS = { subtitle: "💬 자막", cut: "✂️ 구간 삭제", graphic: "🎨 그래픽", audio: "🔊 오디오", etc: "📌 기타" };
 
   // ── 교정된 평문 텍스트 (마커 적용용) ──
+  function applyBlockDeletions(text, dels) {
+    if (!dels || dels.length === 0) return text;
+    const sorted = [...dels].sort((a, b) => b.s - a.s);
+    let result = text;
+    for (const d of sorted) { result = result.slice(0, d.s) + result.slice(d.e); }
+    return result;
+  }
+
   function getCorrectedPlain(block) {
     const se = scriptEdits?.[block.index];
-    if (se !== undefined) return se;
-    const blockDiffs = (diffs || []).filter(d => d.blockIndex === block.index);
-    if (blockDiffs.length === 0) return block.text;
-    const changes = blockDiffs.flatMap(d => d.changes || []);
-    return changes.reduce((t, c) => {
-      if (c.original && c.corrected !== undefined) return t.replace(c.original, c.corrected);
-      if (c.type === "filler_removal" && c.original) return t.replace(c.original, "");
-      return t;
-    }, block.text);
+    let text;
+    if (se !== undefined) { text = se; }
+    else {
+      const blockDiffs = (diffs || []).filter(d => d.blockIndex === block.index);
+      if (blockDiffs.length === 0) { text = block.text; }
+      else {
+        const changes = blockDiffs.flatMap(d => d.changes || []);
+        text = changes.reduce((t, c) => {
+          if (c.original && c.corrected !== undefined) return t.replace(c.original, c.corrected);
+          if (c.type === "filler_removal" && c.original) return t.replace(c.original, "");
+          return t;
+        }, block.text);
+      }
+    }
+    return applyBlockDeletions(text, blockDeletions?.[block.index]);
   }
 
   // ── 마커 하이라이트 적용 HTML ──
