@@ -157,15 +157,23 @@ export function generateExportHTML(data) {
     const labels = d.labels || [];
     const datasets = d.datasets || [];
     const VIS_COLORS = ["#3B82F6","#8B5CF6","#EF4444","#22C55E","#F59E0B","#EC4899","#06B6D4","#F97316"];
+    // 타입 정규화 (AI가 다양한 변형 이름을 생성할 수 있음)
+    const t = (type || "").toLowerCase().replace(/-/g, "_");
 
-    // 테이블 형식 (table, comparison, ranking)
-    if (["table","comparison","ranking"].includes(type)) {
+    // 테이블 형식 (table, comparison, ranking, structure)
+    if (["table","comparison","ranking","structure","matrix"].includes(t)) {
       if (d.rows) {
         const headers = d.headers || Object.keys(d.rows[0] || {});
         return `<table style="margin:8px 0">
           <tr>${headers.map(h => `<th>${esc(String(h))}</th>`).join("")}</tr>
-          ${d.rows.map(r => `<tr>${headers.map(h => `<td>${esc(String(r[h] ?? ""))}</td>`).join("")}</tr>`).join("")}
+          ${d.rows.map(r => `<tr>${(Array.isArray(r) ? r : headers.map(h => r[h] ?? "")).map(v => `<td>${esc(String(v ?? ""))}</td>`).join("")}</tr>`).join("")}
         </table>`;
+      }
+      if (d.items) {
+        return `<div style="margin:8px 0">${d.items.map(item => {
+          if (typeof item === "string") return `<div style="margin:4px 0;font-size:13px;padding:6px 10px;background:#F9FAFB;border-radius:6px">• ${esc(item)}</div>`;
+          return `<div style="margin:4px 0;font-size:13px;padding:6px 10px;background:#F9FAFB;border-radius:6px;border-left:3px solid #3B82F6"><strong>${esc(item.label || item.title || "")}</strong>${item.description || item.value ? ` — ${esc(String(item.description || item.value || ""))}` : ""}</div>`;
+        }).join("")}</div>`;
       }
       if (labels.length && datasets.length) {
         return `<table style="margin:8px 0">
@@ -176,7 +184,7 @@ export function generateExportHTML(data) {
     }
 
     // KPI
-    if (type === "kpi" && d.items) {
+    if (t === "kpi" && d.items) {
       return `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:8px 0">${d.items.map(item =>
         `<div style="background:#F0F9FF;border:1px solid #DBEAFE;border-radius:8px;padding:10px 16px;text-align:center;min-width:100px">
           <div style="font-size:20px;font-weight:800;color:#2563EB">${esc(String(item.value ?? ""))}${esc(item.unit||"")}</div>
@@ -185,12 +193,11 @@ export function generateExportHTML(data) {
     }
 
     // 막대 차트 (bar, bar_horizontal)
-    if (["bar","bar_horizontal","bar_stacked"].includes(type) && labels.length && datasets.length) {
+    if (["bar","bar_horizontal","bar_stacked","bar_grouped"].includes(t) && labels.length && datasets.length) {
       const allVals = datasets.flatMap(ds => ds.data || []);
       const maxVal = Math.max(...allVals, 1);
-      const isH = type === "bar_horizontal";
       return `<div style="margin:8px 0">${labels.map((lb, i) => {
-        const vals = datasets.map((ds, di) => ({ val: (ds.data||[])[i]||0, color: (ds.colors||VIS_COLORS)[isH ? di : i % VIS_COLORS.length], label: ds.label }));
+        const vals = datasets.map((ds, di) => ({ val: (ds.data||[])[i]||0, color: (ds.colors||VIS_COLORS)[di % VIS_COLORS.length], label: ds.label }));
         return `<div style="display:flex;align-items:center;gap:8px;margin:3px 0">
           <span style="font-size:12px;color:#666;width:90px;text-align:right;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(String(lb))}</span>
           <div style="flex:1;display:flex;gap:2px">${vals.map(v =>
@@ -201,7 +208,7 @@ export function generateExportHTML(data) {
     }
 
     // 도넛/파이
-    if (["donut","pie"].includes(type) && labels.length && datasets.length) {
+    if (["donut","pie","pie_chart"].includes(t) && labels.length && datasets.length) {
       const data0 = datasets[0]?.data || [];
       const total = data0.reduce((s,v)=>s+v, 0) || 1;
       return `<div style="margin:8px 0">${labels.map((lb, i) => {
@@ -215,24 +222,64 @@ export function generateExportHTML(data) {
       }).join("")}</div>`;
     }
 
-    // 프로세스/타임라인
-    if (["process","timeline"].includes(type) && d.steps) {
-      return `<div style="margin:8px 0;padding-left:12px;border-left:3px solid #DBEAFE">${d.steps.map((st, i) =>
-        `<div style="margin:6px 0"><span style="font-size:11px;font-weight:700;color:#3B82F6;margin-right:6px">${i+1}.</span><span style="font-size:13px">${esc(st.label || st.title || String(st))}</span>${st.description ? `<div style="font-size:12px;color:#888;margin-left:20px">${esc(st.description)}</div>` : ""}</div>`).join("")}</div>`;
+    // 프로세스/타임라인 (모든 변형 포함)
+    if (t.includes("timeline") || t.includes("process") || t.includes("flow") || t === "sequence") {
+      if (d.steps) {
+        return `<div style="margin:8px 0;padding-left:12px;border-left:3px solid #DBEAFE">${d.steps.map((st, i) =>
+          `<div style="margin:6px 0"><span style="font-size:11px;font-weight:700;color:#3B82F6;margin-right:6px">${i+1}.</span><span style="font-size:13px">${esc(st.label || st.title || String(st))}</span>${st.description || st.date ? `<div style="font-size:12px;color:#888;margin-left:20px">${esc(st.date || "")}${st.date && st.description ? " — " : ""}${esc(st.description || "")}</div>` : ""}</div>`).join("")}</div>`;
+      }
+      if (d.events) {
+        return `<div style="margin:8px 0;padding-left:12px;border-left:3px solid #DBEAFE">${d.events.map((ev, i) =>
+          `<div style="margin:6px 0"><span style="font-size:11px;font-weight:700;color:#3B82F6;margin-right:6px">${esc(ev.date || ev.time || String(i+1))}.</span><span style="font-size:13px">${esc(ev.label || ev.title || ev.event || String(ev))}</span>${ev.description ? `<div style="font-size:12px;color:#888;margin-left:20px">${esc(ev.description)}</div>` : ""}</div>`).join("")}</div>`;
+      }
+      if (d.items) {
+        return `<div style="margin:8px 0;padding-left:12px;border-left:3px solid #DBEAFE">${d.items.map((it, i) => {
+          const label = it.label || it.title || it.event || (typeof it === "string" ? it : JSON.stringify(it));
+          return `<div style="margin:6px 0"><span style="font-size:11px;font-weight:700;color:#3B82F6;margin-right:6px">${i+1}.</span><span style="font-size:13px">${esc(label)}</span>${it.description || it.date ? `<div style="font-size:12px;color:#888;margin-left:20px">${esc(it.date || "")}${it.date && it.description ? " — " : ""}${esc(it.description || "")}</div>` : ""}</div>`;
+        }).join("")}</div>`;
+      }
+      // labels를 timeline으로 표시
+      if (labels.length) {
+        return `<div style="margin:8px 0;padding-left:12px;border-left:3px solid #DBEAFE">${labels.map((lb, i) =>
+          `<div style="margin:6px 0"><span style="font-size:11px;font-weight:700;color:#3B82F6;margin-right:6px">${i+1}.</span><span style="font-size:13px">${esc(String(lb))}</span>${datasets.length ? `<div style="font-size:12px;color:#888;margin-left:20px">${datasets.map(ds => `${esc(ds.label||"")}: ${(ds.data||[])[i] ?? ""}`).join(" · ")}</div>` : ""}</div>`).join("")}</div>`;
+      }
     }
 
     // 체크리스트
-    if (type === "checklist" && d.items) {
+    if (t === "checklist" && d.items) {
       return `<div style="margin:8px 0">${d.items.map(item =>
         `<div style="margin:2px 0;font-size:13px">☐ ${esc(item.label || String(item))}</div>`).join("")}</div>`;
     }
 
-    // 기본: 라인/기타 — 데이터 테이블로 표시
+    // 기본 폴백: labels+datasets → 테이블
     if (labels.length && datasets.length) {
       return `<table style="margin:8px 0">
         <tr><th></th>${datasets.map(ds => `<th>${esc(ds.label || "")}</th>`).join("")}</tr>
         ${labels.map((lb, i) => `<tr><td>${esc(String(lb))}</td>${datasets.map(ds => `<td>${(ds.data||[])[i] ?? ""}${d.unit||""}</td>`).join("")}</tr>`).join("")}
       </table>`;
+    }
+
+    // rows 폴백
+    if (d.rows) {
+      const headers = d.headers || Object.keys(d.rows[0] || {});
+      return `<table style="margin:8px 0">
+        <tr>${headers.map(h => `<th>${esc(String(h))}</th>`).join("")}</tr>
+        ${d.rows.map(r => `<tr>${(Array.isArray(r) ? r : headers.map(h => r[h] ?? "")).map(v => `<td>${esc(String(v ?? ""))}</td>`).join("")}</tr>`).join("")}
+      </table>`;
+    }
+
+    // items 폴백
+    if (d.items) {
+      return `<div style="margin:8px 0">${d.items.map((item, i) => {
+        if (typeof item === "string") return `<div style="margin:3px 0;font-size:13px">${i+1}. ${esc(item)}</div>`;
+        return `<div style="margin:3px 0;font-size:13px">${i+1}. <strong>${esc(item.label || item.title || "")}</strong>${item.description || item.value ? ` — ${esc(String(item.description || item.value))}` : ""}</div>`;
+      }).join("")}</div>`;
+    }
+
+    // steps 폴백
+    if (d.steps) {
+      return `<div style="margin:8px 0;padding-left:12px;border-left:3px solid #DBEAFE">${d.steps.map((st, i) =>
+        `<div style="margin:6px 0"><span style="font-size:11px;font-weight:700;color:#3B82F6;margin-right:6px">${i+1}.</span><span style="font-size:13px">${esc(st.label || st.title || String(st))}</span></div>`).join("")}</div>`;
     }
 
     return "";
