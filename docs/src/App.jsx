@@ -1183,7 +1183,13 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           </div>
           <div ref={rRef} data-scroll-container style={{flex:1,overflowY:"auto"}}>
             <div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:C.txD,textTransform:"uppercase",
-              letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2}}>수정본</div>
+              letterSpacing:"0.08em",borderBottom:`1px solid ${C.bd}`,position:"sticky",top:0,background:C.bg,zIndex:2,
+              display:"flex",alignItems:"center",gap:8}}>
+              <span>수정본</span>
+              {Object.keys(blockDeletions).length > 0 && <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,
+                background:"rgba(239,68,68,0.18)",color:"#EF4444",border:"1px solid rgba(239,68,68,0.3)",
+                textTransform:"none",letterSpacing:"0.02em"}}>추가 삭제 있음</span>}
+            </div>
             {blocks.map(b=>{
               const idx = b.index;
               const corrected = getCorrectedText(b.text, dm[idx]);
