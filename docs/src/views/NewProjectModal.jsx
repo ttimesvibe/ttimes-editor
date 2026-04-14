@@ -82,7 +82,7 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate }) {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           fn,
-          editors: editors.map(e => e.id),
+          editors: editors.map(e => ({ email: e.id, name: e.name })),
           memo,
         }),
       });
