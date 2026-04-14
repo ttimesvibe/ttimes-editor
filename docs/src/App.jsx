@@ -960,7 +960,12 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     <header style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",height:52,
       borderBottom:`1px solid ${C.bd}`,background:C.sf,flexShrink:0}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        {onBackToDashboard && <button onClick={onBackToDashboard} style={{padding:"4px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
+        {onBackToDashboard && <button onClick={async () => {
+          if (blocks.length > 0 && sessionIdRef.current) {
+            try { await autoSaveToKV(); } catch {}
+          }
+          onBackToDashboard();
+        }} style={{padding:"4px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
           background:"transparent",color:C.txM,fontSize:12,cursor:"pointer",fontFamily:FN}}>← 프로젝트 목록</button>}
         <span style={{fontSize:18,fontWeight:800,letterSpacing:"-0.03em"}}>
           <span style={{color:C.ac}}>티타임즈</span> 편집 CMS
