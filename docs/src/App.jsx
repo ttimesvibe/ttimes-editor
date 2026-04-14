@@ -215,23 +215,45 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     const sid = params.get("s");
     if (sid) {
       setReadOnly(false);
-      setSessionId(sid); // 업데이트용 ID 기억
-      setBusy(true); setProg({p:30,l:"공유 세션 불러오는 중..."});
-      apiLoadSession(sid, cfg)
-        .then(data => {
-          setBlocks(data.blocks || []);
-          setAnal(data.anal || null);
-          setDiffs(data.diffs || []);
-          setHl(data.hl || []);
-          setHlStats(data.hlStats || null);
-          setHlVerdicts(data.hlVerdicts || {}); setHlEdits(data.hlEdits || {}); setHlMarkers(data.hlMarkers || {}); setScriptEdits(data.scriptEdits || {}); setReviewData(data.reviewData || null);
-          setFn(data.fn || "");
-          setGReady((data.hl?.length > 0));
-          setTab(data.hl?.length > 0 ? "guide" : data.reviewData ? "review" : "correction");
-          setProg({p:100,l:"✅ 공유 세션 로드 완료"});
-        })
-        .catch(e => setErr(e.message))
-        .finally(() => setBusy(false));
+      setSessionId(sid); sessionIdRef.current = sid;
+      setBusy(true); setProg({p:20,l:"세션 불러오는 중..."});
+      (async () => {
+        try {
+          const data = await apiLoadSession(sid, cfg);
+          if (data.blocks && data.blocks.length > 0) {
+            // 레거시 전체 데이터
+            setBlocks(data.blocks);
+            setAnal(data.anal || null);
+            setDiffs(data.diffs || []);
+            setHl(data.hl || []);
+            setHlStats(data.hlStats || null);
+            setHlVerdicts(data.hlVerdicts || {}); setHlEdits(data.hlEdits || {}); setHlMarkers(data.hlMarkers || {}); setScriptEdits(data.scriptEdits || {}); setReviewData(data.reviewData || null);
+            setFn(data.fn || "");
+            setGReady((data.hl?.length > 0));
+            setTab(data.hl?.length > 0 ? "guide" : data.reviewData ? "review" : "correction");
+          } else if (data.schema === "v2") {
+            // v2 메타만 — 탭 데이터 추가 로드
+            setFn(data.fn || "");
+            setProg({p:40,l:"탭 데이터 불러오는 중..."});
+            const tabs = ["correction","guide","highlight","visual","modify","setgen","review"];
+            const results = await Promise.allSettled(tabs.map(t => apiLoadTab(sid, t, cfg)));
+            const td = {};
+            results.forEach((r, i) => { if (r.status === "fulfilled" && r.value) td[tabs[i]] = r.value; });
+            const c = td.correction || {};
+            setBlocks(c.blocks || []); setAnal(c.anal || null); setDiffs(c.diffs || []);
+            setScriptEdits(c.scriptEdits || {});
+            if (td.review) setReviewData(td.review.reviewData || td.review);
+            const h = td.highlight || {};
+            setHl(h.hl || []); setHlStats(h.hlStats || null);
+            setHlVerdicts(h.hlVerdicts || {}); setHlEdits(h.hlEdits || {}); setHlMarkers(h.hlMarkers || {});
+            const hasHl = (h.hl?.length > 0);
+            setGReady(hasHl);
+            setTab(hasHl ? "guide" : c.blocks?.length > 0 ? "correction" : "correction");
+          }
+          setProg({p:100,l:"✅ 세션 로드 완료"});
+        } catch (e) { setErr(e.message); }
+        finally { setBusy(false); }
+      })();
     } else {
       try {
         const saved = localStorage.getItem("te_session");

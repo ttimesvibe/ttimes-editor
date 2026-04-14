@@ -321,23 +321,24 @@ async function handleAutoSave(body, env, headers) {
   return new Response(JSON.stringify({ success: true, id }), { headers });
 }
 
-// /load/{id} — 메타 반환 (새 스키마), 레거시 폴백
+// /load/{id} — 레거시 전체 데이터 우선, 없으면 v2 메타
 async function handleLoadMeta(id, env, headers) {
   if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
 
-  // 새 스키마: s:{id}:meta 확인
+  // 레거시 전체 데이터 우선 확인 (blocks, anal 등 포함)
+  let data = await env.SESSIONS.get("save_" + id);
+  if (!data) data = await env.SESSIONS.get(id);
+  if (!data) data = await env.SESSIONS.get("auto_" + id);
+  if (data) return new Response(data, { headers });
+
+  // v2 메타 폴백
   const metaRaw = await env.SESSIONS.get(`s:${id}:meta`);
   if (metaRaw) {
     const meta = JSON.parse(metaRaw);
     return new Response(JSON.stringify({ schema: "v2", ...meta }), { headers });
   }
 
-  // 레거시 폴백: save_ → 기존 → auto_
-  let data = await env.SESSIONS.get("save_" + id);
-  if (!data) data = await env.SESSIONS.get(id);
-  if (!data) data = await env.SESSIONS.get("auto_" + id);
-  if (!data) return new Response(JSON.stringify({ error: "세션을 찾을 수 없습니다." }), { status: 404, headers });
-  return new Response(data, { headers });
+  return new Response(JSON.stringify({ error: "세션을 찾을 수 없습니다." }), { status: 404, headers });
 }
 
 // /load/{id}/{tab} — 특정 탭 데이터 반환
