@@ -617,7 +617,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
       source_text: "",
       subtitle: addForm.subtitle.trim(),
       type: addForm.type,
-      type_name: addForm.type === "B2" ? "용어 설명형" : addForm.type === "C1" ? "자료" : "수동 추가",
+      type_name: addForm.type === "B2" ? "용어 설명형" : addForm.type === "C1" ? "추가 삭제" : "수동 추가",
       reason: "편집자 수동 추가",
       placement_hint: null,
       sequence_id: null,
@@ -1817,7 +1817,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
                     </div>
                   )}
                   <textarea value={addForm.subtitle} onChange={e=>setAddForm(f=>({...f,subtitle:e.target.value}))}
-                    placeholder={addForm.type==="B2"?"용어(English) : 설명":addForm.type==="C1"?"자료 내용 (예: 관련 기사 캡쳐 이미지)":"강조자막 내용"}
+                    placeholder={addForm.type==="B2"?"용어(English) : 설명":addForm.type==="C1"?"추가 삭제 내용":"강조자막 내용"}
                     rows={2} autoFocus={addForm.type!=="B2"}
                     style={{width:"100%",padding:"6px 8px",borderRadius:6,border:`1px solid ${C.bd}`,
                       background:"rgba(0,0,0,0.3)",color:C.tx,fontSize:13,fontFamily:"'Pretendard',sans-serif",

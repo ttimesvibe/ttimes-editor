@@ -155,7 +155,7 @@ export function TypeBadge({ type, onChangeType }) {
     {open && <div style={{position:"absolute",top:"100%",left:0,marginTop:4,zIndex:999,
       background:C.sf,border:`1px solid ${C.bd}`,borderRadius:6,boxShadow:`0 4px 16px ${C.shadow||"rgba(0,0,0,0.3)"}`,
       overflow:"hidden",minWidth:80}}>
-      {[["A","자막"],["B","용어설명"],["C_user","자료"]].map(([k,l])=>{
+      {[["A","자막"],["B","용어설명"],["C_user","추가 삭제"]].map(([k,l])=>{
         const displayCat = k === "C_user" ? "C" : k;
         const m = labelMap[displayCat] || labelMap["A"];
         return <div key={k} onClick={e=>{e.stopPropagation();onChangeType(k);setOpen(false)}}
