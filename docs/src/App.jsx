@@ -1006,12 +1006,6 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
             📥 내보내기
           </button>
         )}
-        {hasData && (
-          <button onClick={handleReset} title="새 파일 시작" style={{padding:"5px 10px",borderRadius:6,
-            border:`1px solid ${C.bd}`,background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>
-            ✕ 새 파일
-          </button>
-        )}
         {!readOnly && <button onClick={()=>setShowSessions(true)} title="작업 히스토리"
           style={{padding:"5px 10px",borderRadius:6,border:`1px solid ${C.bd}`,
             background:"transparent",color:C.txM,fontSize:12,cursor:"pointer"}}>📋</button>}
