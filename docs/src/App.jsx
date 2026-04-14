@@ -133,11 +133,18 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
   }, []);
   const [showNewProject, setShowNewProject] = useState(false);
 
-  const handleNewProjectCreate = useCallback((id, fileContent, fileName) => {
+  const handleNewProjectCreate = useCallback(async (id, fileContent, fileName) => {
     setShowNewProject(false);
-    // 세션 ID로 에디터 진입 — 파일 내용은 에디터에서 URL의 ?s=로 로드
+    // 원고 텍스트를 manuscript 탭에 저장
+    if (fileContent) {
+      try {
+        await apiSaveTab(id, "manuscript", { text: fileContent, fileName }, cfg, fileName);
+      } catch (e) {
+        console.error("원고 저장 실패:", e);
+      }
+    }
     onSelectProject(id);
-  }, [onSelectProject]);
+  }, [onSelectProject, cfg]);
 
   return <>
     <Dashboard authUser={authUser} cfg={cfg} onSelectProject={onSelectProject}
@@ -236,7 +243,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
             // v2 메타만 — 탭 데이터 추가 로드
             setFn(data.fn || "");
             setProg({p:40,l:"탭 데이터 불러오는 중..."});
-            const tabs = ["correction","guide","highlight","visual","modify","setgen","review"];
+            const tabs = ["correction","guide","highlight","visual","modify","setgen","review","manuscript"];
             const results = await Promise.allSettled(tabs.map(t => apiLoadTab(sid, t, cfg)));
             const td = {};
             results.forEach((r, i) => { if (r.status === "fulfilled" && r.value) td[tabs[i]] = r.value; });
@@ -249,7 +256,21 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
             setHlVerdicts(h.hlVerdicts || {}); setHlEdits(h.hlEdits || {}); setHlMarkers(h.hlMarkers || {});
             const hasHl = (h.hl?.length > 0);
             setGReady(hasHl);
-            setTab(hasHl ? "guide" : c.blocks?.length > 0 ? "correction" : "correction");
+
+            // blocks가 비어있고 manuscript 탭에 원고가 있으면 자동으로 0차 검토 시작
+            if ((!c.blocks || c.blocks.length === 0) && td.manuscript?.text) {
+              const msText = td.manuscript.text;
+              const msName = td.manuscript.fileName || data.fn || "";
+              const reviewBlocks = parseBlocks(msText);
+              const duration = calcDuration(reviewBlocks);
+              const paragraphs = msText.split('\n').map(line => [{ text: line, deleted: false }]);
+              setFn(msName);
+              setReviewData({ hasTrackChanges: false, deletedBlockIndices: [], blockStrikeRanges: {}, duration, reviewBlocks, cleanTextChars: msText.length, paragraphs, cleanText: msText });
+              setBlocks(reviewBlocks);
+              setTab("review");
+            } else {
+              setTab(hasHl ? "guide" : c.blocks?.length > 0 ? "correction" : "correction");
+            }
           }
           setProg({p:100,l:"✅ 세션 로드 완료"});
         } catch (e) { setErr(e.message); }
