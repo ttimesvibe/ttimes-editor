@@ -2045,9 +2045,9 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
       *{box-sizing:border-box;margin:0;padding:0}
       
       ::-webkit-scrollbar { width: 10px; height: 10px; }
-      ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.03); }
-      ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 5px; }
-      ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+      ::-webkit-scrollbar-track { background: ${theme === "dark" ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.04)"}; }
+      ::-webkit-scrollbar-thumb { background: ${theme === "dark" ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"}; border-radius: 5px; }
+      ::-webkit-scrollbar-thumb:hover { background: ${theme === "dark" ? "rgba(255, 255, 255, 0.4)" : "rgba(0, 0, 0, 0.4)"}; }
       
       body{overflow:hidden}
     `}</style>
