@@ -252,10 +252,16 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
             setBlocks(c.blocks || []); setAnal(c.anal || null); setDiffs(c.diffs || []);
             setScriptEdits(c.scriptEdits || {}); setBlockDeletions(c.blockDeletions || {});
             if (td.review) setReviewData(td.review.reviewData || td.review);
-            const h = td.highlight || {};
-            setHl(h.hl || []); setHlStats(h.hlStats || null);
-            setHlVerdicts(h.hlVerdicts || {}); setHlEdits(h.hlEdits || {}); setHlMarkers(h.hlMarkers || {});
-            const hasHl = (h.hl?.length > 0);
+            // 편집가이드 데이터: guide 탭 우선, 폴백으로 highlight 탭 (레거시 호환)
+            const g = td.guide || {};
+            const gFallback = (g.hl ? g : td.highlight) || {};
+            setHl(gFallback.hl || []); setHlStats(gFallback.hlStats || null);
+            setHlVerdicts(gFallback.hlVerdicts || {}); setHlEdits(gFallback.hlEdits || {}); setHlMarkers(gFallback.hlMarkers || {});
+            const hasHl = (gFallback.hl?.length > 0);
+            // 하이라이트 탭 clips 복원
+            if (td.highlight?.clips) {
+              setExportCache(prev => ({ ...prev, highlight: td.highlight }));
+            }
             setGReady(hasHl);
 
             // blocks가 비어있고 manuscript 탭에 원고가 있으면 자동으로 0차 검토 시작
@@ -367,12 +373,17 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
   // ── 탭별 KV 저장 헬퍼 (프로젝트 ID 기반) ──
   const saveAllTabsToKV = useCallback(async (id) => {
     if (!id || cfg.apiMode === "mock") return;
-    await Promise.all([
+    const saves = [
       apiSaveTab(id, "correction", { blocks, anal, diffs, scriptEdits, blockDeletions }, cfg, fn),
       apiSaveTab(id, "review", reviewData || {}, cfg, fn),
-      apiSaveTab(id, "highlight", { hl, hlStats, hlVerdicts, hlEdits, hlMarkers }, cfg, fn),
-    ]);
-  }, [blocks, anal, diffs, scriptEdits, blockDeletions, reviewData, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, cfg, fn]);
+      apiSaveTab(id, "guide", { hl, hlStats, hlVerdicts, hlEdits, hlMarkers }, cfg, fn),
+    ];
+    // 하이라이트 탭 clips가 있으면 함께 저장
+    if (exportCache.highlight) {
+      saves.push(apiSaveTab(id, "highlight", exportCache.highlight, cfg, fn));
+    }
+    await Promise.all(saves);
+  }, [blocks, anal, diffs, scriptEdits, blockDeletions, reviewData, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, exportCache, cfg, fn]);
 
   // ── 자동 KV 저장 (큰 작업 완료 시 호출) ──
   const autoSaveToKV = useCallback(async (overrideData = {}) => {
@@ -411,11 +422,15 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
       savingInProgress.current = true;
       setAutoSaveStatus("saving");
       try {
-        await Promise.all([
+        const saves = [
           apiSaveTab(curId, "correction", { blocks, anal, diffs, scriptEdits, blockDeletions }, cfg, fn),
           apiSaveTab(curId, "review", reviewData || {}, cfg, fn),
-          apiSaveTab(curId, "highlight", { hl, hlStats, hlVerdicts, hlEdits, hlMarkers }, cfg, fn),
-        ]);
+          apiSaveTab(curId, "guide", { hl, hlStats, hlVerdicts, hlEdits, hlMarkers }, cfg, fn),
+        ];
+        if (exportCache.highlight) {
+          saves.push(apiSaveTab(curId, "highlight", exportCache.highlight, cfg, fn));
+        }
+        await Promise.all(saves);
         setLastSavedSnapshot(currentSnapshot);
         setAutoSaveStatus("saved");
         updateStepProgress(tab);
