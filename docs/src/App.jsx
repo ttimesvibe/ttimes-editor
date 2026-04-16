@@ -395,22 +395,26 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
 
   // 저장 & 공유
   // ── dirty 탭만 KV 저장 (변경된 탭만 개별 저장) ──
-  const saveDirtyTabsToKV = useCallback(async (id) => {
+  // overrides: { correction: {...}, guide: {...} } — setState 직후 클로저가 stale할 때 최신 데이터 주입용
+  const saveDirtyTabsToKV = useCallback(async (id, overrides = {}) => {
     if (!id || cfg.apiMode === "mock") return;
     const dirty = dirtyTabs.current;
     if (dirty.size === 0) return;
     const saves = [];
     if (dirty.has("correction")) {
-      saves.push(apiSaveTab(id, "correction", { blocks, anal, diffs, scriptEdits, blockDeletions }, cfg, fn));
+      const d = overrides.correction || { blocks, anal, diffs, scriptEdits, blockDeletions };
+      saves.push(apiSaveTab(id, "correction", d, cfg, fn));
     }
     if (dirty.has("review")) {
-      saves.push(apiSaveTab(id, "review", reviewData || {}, cfg, fn));
+      saves.push(apiSaveTab(id, "review", overrides.review || reviewData || {}, cfg, fn));
     }
     if (dirty.has("guide")) {
-      saves.push(apiSaveTab(id, "guide", { hl, hlStats, hlVerdicts, hlEdits, hlMarkers }, cfg, fn));
+      const d = overrides.guide || { hl, hlStats, hlVerdicts, hlEdits, hlMarkers };
+      saves.push(apiSaveTab(id, "guide", d, cfg, fn));
     }
-    if (dirty.has("highlight") && exportCache.highlight) {
-      saves.push(apiSaveTab(id, "highlight", exportCache.highlight, cfg, fn));
+    if (dirty.has("highlight")) {
+      const d = overrides.highlight || exportCache.highlight;
+      if (d) saves.push(apiSaveTab(id, "highlight", d, cfg, fn));
     }
     if (saves.length > 0) await Promise.all(saves);
     const savedTabs = [...dirty];
@@ -419,6 +423,8 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
   }, [blocks, anal, diffs, scriptEdits, blockDeletions, reviewData, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, exportCache, cfg, fn]);
 
   // ── 자동 KV 저장 (큰 작업 완료 시 호출) ──
+  // overrideData: setState 직후 아직 렌더링 전일 때 최신 데이터를 직접 전달
+  //   예: autoSaveToKV({ diffs: ad }) → correction 탭에 ad를 직접 사용
   const autoSaveToKV = useCallback(async (overrideData = {}) => {
     if (cfg.apiMode === "mock") return;
     if (savingInProgress.current) return;
@@ -426,14 +432,28 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     try {
       const id = sessionIdRef.current;
       if (!id) { console.warn("자동 저장 스킵: 세션 ID 없음"); return; }
-      await saveDirtyTabsToKV(id);
+      // overrideData를 탭별 overrides로 변환
+      const overrides = {};
+      if (overrideData.diffs !== undefined || overrideData.blocks !== undefined) {
+        overrides.correction = { blocks: overrideData.blocks || blocks, anal: overrideData.anal || anal, diffs: overrideData.diffs || diffs, scriptEdits: overrideData.scriptEdits || scriptEdits, blockDeletions: overrideData.blockDeletions || blockDeletions };
+        dirtyTabs.current.add("correction");
+      }
+      if (overrideData.hl !== undefined) {
+        overrides.guide = { hl: overrideData.hl || hl, hlStats: overrideData.hlStats || hlStats, hlVerdicts: overrideData.hlVerdicts || hlVerdicts, hlEdits: overrideData.hlEdits || hlEdits, hlMarkers: overrideData.hlMarkers || hlMarkers };
+        dirtyTabs.current.add("guide");
+      }
+      if (overrideData.reviewData !== undefined) {
+        overrides.review = overrideData.reviewData;
+        dirtyTabs.current.add("review");
+      }
+      await saveDirtyTabsToKV(id, overrides);
       updateStepProgress(tab);
     } catch (e) {
       console.warn("자동 저장 실패:", e.message);
     } finally {
       savingInProgress.current = false;
     }
-  }, [cfg, saveDirtyTabsToKV, tab, updateStepProgress]);
+  }, [cfg, saveDirtyTabsToKV, blocks, anal, diffs, scriptEdits, blockDeletions, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, tab, updateStepProgress]);
 
   // ── 3분 디바운스 자동 저장 (변경 감지 → 3분 후 dirty 탭만 저장) ──
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
@@ -472,6 +492,8 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
   }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn, lastSavedSnapshot, cfg]);
 
   const handleShare = useCallback(async () => {
+    if (savingInProgress.current) return; // 자동저장과 충돌 방지
+    savingInProgress.current = true;
     setSaving(true); setErr(null);
     try {
       const id = sessionIdRef.current;
@@ -483,7 +505,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
       setLastSavedSnapshot(JSON.stringify({ blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn }));
       if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); setAutoSaveStatus(""); }
     } catch (e) { setErr(e.message); }
-    finally { setSaving(false); }
+    finally { setSaving(false); savingInProgress.current = false; }
   }, [blocks, anal, diffs, hl, hlStats, hlVerdicts, hlEdits, hlMarkers, scriptEdits, blockDeletions, reviewData, fn, cfg, saveDirtyTabsToKV]);
 
   // ── 내보내기 ──
@@ -1039,7 +1061,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           <button onClick={handleShare} disabled={saving} style={{padding:"5px 14px",borderRadius:6,border:"none",
             background:saving?"rgba(74,108,247,0.4)":`linear-gradient(135deg,#22C55E,#16A34A)`,
             color:"#fff",fontSize:12,fontWeight:600,cursor:saving?"not-allowed":"pointer"}}>
-            {saving?"저장 중…":"↑ 업데이트"}
+            {saving?"저장 중…":"💾 저장"}
           </button>
         )}
         {hasData && (

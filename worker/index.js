@@ -54,6 +54,7 @@ export default {
     const corsHeaders = {
       "Access-Control-Allow-Origin": allowedOrigin,
       "Content-Type": "application/json",
+      "Cache-Control": "no-store",
     };
 
     // OPTIONS는 인증 불필요 (CORS preflight)
@@ -276,7 +277,7 @@ async function handleSessionDelete(body, env, headers) {
   await env.SESSIONS.delete("save_" + id);
   await env.SESSIONS.delete("auto_" + id);
   // 탭별 key 삭제 (새 스키마)
-  const tabs = ["meta","manuscript","correction","subtitle","review","highlight","setgen","metadata"];
+  const tabs = ["meta","manuscript","correction","subtitle","review","highlight","guide","setgen","metadata","visual","modify"];
   await Promise.all(tabs.map(t => env.SESSIONS.delete(`s:${id}:${t}`)));
   // 인덱스에서 제거
   try {
@@ -321,22 +322,22 @@ async function handleAutoSave(body, env, headers) {
   return new Response(JSON.stringify({ success: true, id }), { headers });
 }
 
-// /load/{id} — 레거시 전체 데이터 우선, 없으면 v2 메타
+// /load/{id} — v2 메타 우선, 없으면 레거시 폴백
 async function handleLoadMeta(id, env, headers) {
   if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
 
-  // 레거시 전체 데이터 우선 확인 (blocks, anal 등 포함)
-  let data = await env.SESSIONS.get("save_" + id);
-  if (!data) data = await env.SESSIONS.get(id);
-  if (!data) data = await env.SESSIONS.get("auto_" + id);
-  if (data) return new Response(data, { headers });
-
-  // v2 메타 폴백
+  // v2 메타 우선 확인 (탭별 저장 구조)
   const metaRaw = await env.SESSIONS.get(`s:${id}:meta`);
   if (metaRaw) {
     const meta = JSON.parse(metaRaw);
     return new Response(JSON.stringify({ schema: "v2", ...meta }), { headers });
   }
+
+  // 레거시 폴백 (이전 방식으로 저장된 데이터)
+  let data = await env.SESSIONS.get("save_" + id);
+  if (!data) data = await env.SESSIONS.get(id);
+  if (!data) data = await env.SESSIONS.get("auto_" + id);
+  if (data) return new Response(data, { headers });
 
   return new Response(JSON.stringify({ error: "세션을 찾을 수 없습니다." }), { status: 404, headers });
 }
@@ -460,7 +461,7 @@ async function handleProjectDelete(body, env, headers) {
   await env.SESSIONS.put(PROJECT_INDEX_KEY, JSON.stringify(filtered));
 
   // 관련 KV key 삭제
-  const tabs = ["meta","manuscript","correction","subtitle","review","highlight","setgen","metadata","visual","modify"];
+  const tabs = ["meta","manuscript","correction","subtitle","review","highlight","guide","setgen","metadata","visual","modify"];
   await Promise.all(tabs.map(t => env.SESSIONS.delete(`s:${id}:${t}`)));
   // 레거시 key도 삭제
   await env.SESSIONS.delete(id);
