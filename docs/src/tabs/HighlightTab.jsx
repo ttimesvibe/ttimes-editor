@@ -249,10 +249,10 @@ export function HighlightTab({ script, blocks, sessionId, config, onSave, curren
               onMouseDown={e=>e.stopPropagation()} onDragStart={e=>e.stopPropagation()}
               onChange={e=>{const v=e.target.value;setClips(prev=>prev.map(c=>c.id===clip.id?{...c,text:v,seconds:Math.round(v.length/CPS)}:c))}}
               style={{fontSize:13,lineHeight:1.6,color:C.tx,width:"100%",border:"1px solid transparent",
-                background:"rgba(255,255,255,0.5)",borderRadius:4,resize:"none",outline:"none",fontFamily:FN,
+                background:C.inputBg||"rgba(0,0,0,0.2)",borderRadius:4,resize:"none",outline:"none",fontFamily:FN,
                 padding:"4px 6px",cursor:"text",boxSizing:"border-box"}}
-              onFocus={e=>{e.target.style.borderColor=C.ac;e.target.style.background="#fff"}}
-              onBlur={e=>{e.target.style.borderColor="transparent";e.target.style.background="rgba(255,255,255,0.5)"}}
+              onFocus={e=>{e.target.style.borderColor=C.ac;e.target.style.background=C.sf||"rgba(0,0,0,0.3)"}}
+              onBlur={e=>{e.target.style.borderColor="transparent";e.target.style.background=C.inputBg||"rgba(0,0,0,0.2)"}}
               rows={Math.max(2,Math.ceil(clip.text.length/28))}/>
             <div onClick={()=>scrollToClip(clip)} style={{fontSize:11,color:C.txD,marginTop:4,cursor:"pointer"}} title="원고에서 찾기">~{clip.seconds || Math.round(clip.text.length/CPS)}초</div>
           </div>
