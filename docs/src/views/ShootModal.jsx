@@ -222,31 +222,6 @@ export function ShootModal({ authUser, cfg, onClose, onCreate, shoot: editShoot 
             placeholder="인터뷰 주제, 특이사항 등" style={inputStyle} />
         </div>
 
-        {/* 편 수 */}
-        <div style={{ marginBottom: 18 }}>
-          <div style={labelStyle}>편 수</div>
-          <div style={{ display: "flex", gap: 0 }}>
-            {EPISODE_OPTIONS.map((ep) => {
-              const isActive = totalEpisodes === ep;
-              return (
-                <span key={String(ep)} onClick={() => setTotalEpisodes(ep)}
-                  style={{
-                    flex: 1, textAlign: "center", padding: "8px 0", fontSize: 13, fontWeight: 600,
-                    cursor: "pointer",
-                    border: `1px solid ${isActive ? "#4A6CF750" : "#2E3348"}`,
-                    borderRight: "none",
-                    background: isActive ? "#4A6CF720" : "#0F1117",
-                    color: isActive ? "#7C9DFF" : "#5E6380",
-                  }}>
-                  {EPISODE_LABELS[String(ep)]}
-                </span>
-              );
-            })}
-            {/* close the last border */}
-            <span style={{ width: 0, borderRight: "1px solid #2E3348" }} />
-          </div>
-        </div>
-
         {/* 날짜 + 시간 */}
         <div style={{ display: "flex", gap: 12, marginBottom: 18 }}>
           <div style={{ flex: 1 }}>
@@ -371,6 +346,30 @@ export function ShootModal({ authUser, cfg, onClose, onCreate, shoot: editShoot 
               })}
             </div>
           )}
+        </div>
+
+        {/* 편 수 */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={labelStyle}>편 수</div>
+          <div style={{ display: "flex", gap: 0 }}>
+            {EPISODE_OPTIONS.map((ep) => {
+              const isActive = totalEpisodes === ep;
+              return (
+                <span key={String(ep)} onClick={() => setTotalEpisodes(ep)}
+                  style={{
+                    flex: 1, textAlign: "center", padding: "8px 0", fontSize: 13, fontWeight: 600,
+                    cursor: "pointer",
+                    border: `1px solid ${isActive ? "#4A6CF750" : "#2E3348"}`,
+                    borderRight: "none",
+                    background: isActive ? "#4A6CF720" : "#0F1117",
+                    color: isActive ? "#7C9DFF" : "#5E6380",
+                  }}>
+                  {EPISODE_LABELS[String(ep)]}
+                </span>
+              );
+            })}
+            <span style={{ width: 0, borderRight: "1px solid #2E3348" }} />
+          </div>
         </div>
 
         {/* Actions */}
