@@ -195,6 +195,14 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
           {/* Dropdown */}
           {openDropdown && (
             <div style={{ border: "1px solid #2E3348", background: "#0F1117", marginLeft: 100 }}>
+              {/* Close button */}
+              <div onClick={() => setOpenDropdown(null)}
+                style={{ padding: "6px 14px", fontSize: 11, color: "#8B90A5", cursor: "pointer",
+                  borderBottom: "1px solid #2E3348", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#1E2230"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <span>닫기</span><span>✕</span>
+              </div>
               {teamMembers.map(m => {
                 const isSelected = (roles[openDropdown] || []).some(r => r.email === (m.email || m.id));
                 return (
@@ -208,7 +216,7 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
                       alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700,
                       background: avatarColor(m.name || m.email) + "40",
                       color: avatarColor(m.name || m.email) }}>{(m.name || m.email).charAt(0)}</span>
-                    <span style={{ fontWeight: 500, flex: 1 }}>{m.name || m.email}</span>
+                    <span style={{ fontWeight: 500, flex: 1, color: "#E8E9ED" }}>{m.name || m.email}</span>
                     {isSelected && <span style={{ fontSize: 11, fontWeight: 600, color: "#4ADE80" }}>선택됨</span>}
                   </div>
                 );
