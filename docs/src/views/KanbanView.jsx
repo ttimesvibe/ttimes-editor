@@ -29,6 +29,13 @@ const COLUMNS = [
 const ROLE_LABELS = { filming: "촬영", scriptEdit: "원고", videoEdit: "영상" };
 const ROLE_COLORS = { filming: "#F59E0B", scriptEdit: "#4A6CF7", videoEdit: "#22C55E" };
 
+// ── Stage transition labels ──
+const STAGE_NEXT = {
+  "pre-production": { label: "촬영 완료 → 원고 편집", next: "editing" },
+  "editing": { label: "원고 완료 → 영상 편집", next: "post-production" },
+  "post-production": { label: "영상 완료 → 표출 완료", next: "done" },
+};
+
 // ── Helpers ──
 
 function authHeaders() {
@@ -77,13 +84,13 @@ function getMonthKey(iso) {
 // KANBAN VIEW
 // ═══════════════════════════════════════════════
 
-export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewProject, mineOnly, refreshKey }) {
+export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewProject, onEditShoot, mineOnly, refreshKey }) {
   const [shoots, setShoots] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedDone, setExpandedDone] = useState({});
-  const [dragOverCol, setDragOverCol] = useState(null); // column key being hovered
-  const [draggingId, setDraggingId] = useState(null);   // shoot id being dragged
+  const [dragOverCol, setDragOverCol] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
 
   // ── Fetch data ──
 
@@ -111,7 +118,6 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
   // ── Stage move ──
 
   const moveShootStage = async (shootId, newStage) => {
-    // Optimistic update
     setShoots(prev => prev.map(s => s.id === shootId ? { ...s, stage: newStage } : s));
     try {
       await fetch(`${cfg.workerUrl}/shoots/move-stage`, {
@@ -122,7 +128,7 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
       fetchData();
     } catch (err) {
       console.error("stage 이동 실패:", err);
-      fetchData(); // revert on error
+      fetchData();
     }
   };
 
@@ -144,7 +150,6 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
   };
 
   // ── Drag & Drop handlers ──
-  // Data format: "shoot:id" or "project:id"
 
   const handleDragStart = (e, type, id) => {
     e.dataTransfer.setData("text/plain", `${type}:${id}`);
@@ -214,13 +219,20 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
   const grouped = {};
   COLUMNS.forEach(col => { grouped[col.key] = []; });
 
-  (Array.isArray(shoots) ? shoots : []).forEach(s => {
+  // Sort shoots by shootDate (ascending — nearest first)
+  const sortedShoots = [...(Array.isArray(shoots) ? shoots : [])].sort((a, b) => {
+    const da = a.shootDate ? new Date(a.shootDate).getTime() : Infinity;
+    const db = b.shootDate ? new Date(b.shootDate).getTime() : Infinity;
+    return da - db;
+  });
+
+  sortedShoots.forEach(s => {
     if (!isMyShoot(s)) return;
     if (grouped[s.stage]) grouped[s.stage].push({ type: "shoot", data: s });
   });
 
   const childIdSet = new Set();
-  (Array.isArray(shoots) ? shoots : []).forEach(s => {
+  sortedShoots.forEach(s => {
     if (s.stage === "editing" && s.childProjectIds?.length) {
       s.childProjectIds.forEach(id => childIdSet.add(id));
     }
@@ -344,6 +356,9 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
                     <ShootCard
                       key={item.data.id}
                       shoot={item.data}
+                      stage={col.key}
+                      onClick={() => onEditShoot?.(item.data)}
+                      onMoveStage={moveShootStage}
                       onDragStart={(e) => handleDragStart(e, "shoot", item.data.id)}
                       onDragEnd={handleDragEnd}
                       isDragging={draggingId === item.data.id}
@@ -391,10 +406,15 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
                     {isExpanded && items.map(item => {
                       if (item.type === "shoot") {
                         return (
-                          <div key={item.data.id} style={{
-                            background: C.sf, border: `1px solid ${C.bd}`, padding: 12, marginBottom: 6,
-                            opacity: 0.6,
-                          }}>
+                          <div key={item.data.id}
+                            onClick={() => onEditShoot?.(item.data)}
+                            style={{
+                              background: C.sf, border: `1px solid ${C.bd}`, padding: 12, marginBottom: 6,
+                              opacity: 0.6, cursor: "pointer",
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = "#454B66"}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = C.bd}
+                          >
                             <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{item.data.guest}</div>
                             <div style={{ fontSize: 11, color: "#5E6380", marginTop: 2 }}>{item.data.topic}</div>
                           </div>
@@ -433,21 +453,23 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
 // SHOOT CARD (촬영 예정 등)
 // ═══════════════════════════════════════════════
 
-function ShootCard({ shoot, onDragStart, onDragEnd, isDragging }) {
+function ShootCard({ shoot, stage, onClick, onMoveStage, onDragStart, onDragEnd, isDragging }) {
   const allRoles = [
     ...(shoot.roles?.filming || []),
     ...(shoot.roles?.scriptEdit || []),
     ...(shoot.roles?.videoEdit || []),
   ];
+  const stageAction = STAGE_NEXT[stage];
 
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onClick={onClick}
       style={{
         background: C.sf, border: `1px solid ${C.bd}`, padding: 14,
-        cursor: "grab", transition: "border-color 0.1s, opacity 0.2s",
+        cursor: "pointer", transition: "border-color 0.1s, opacity 0.2s",
         opacity: isDragging ? 0.4 : 1,
       }}
       onMouseEnter={e => { if (!isDragging) e.currentTarget.style.borderColor = "#454B66"; }}
@@ -513,6 +535,23 @@ function ShootCard({ shoot, onDragStart, onDragEnd, isDragging }) {
               </span>
             );
           })}
+        </div>
+      )}
+
+      {/* Stage transition button */}
+      {stageAction && (
+        <div
+          onClick={(e) => { e.stopPropagation(); onMoveStage(shoot.id, stageAction.next); }}
+          style={{
+            marginTop: 10, padding: "7px 0", textAlign: "center",
+            border: `1px solid ${C.bd}`, fontSize: 11, fontWeight: 600,
+            color: "#8B90A5", cursor: "pointer", background: "#0F1117",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "#4A6CF7"; e.currentTarget.style.color = "#4A6CF7"; e.currentTarget.style.background = "#4A6CF710"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = C.bd; e.currentTarget.style.color = "#8B90A5"; e.currentTarget.style.background = "#0F1117"; }}
+        >
+          {stageAction.label} →
         </div>
       )}
     </div>
@@ -628,7 +667,7 @@ function ProjectCard({ project, shoots, onClick, onDragStart, onDragEnd, isDragg
       onClick={onClick}
       style={{
         background: C.sf, border: `1px solid ${C.bd}`, padding: 14,
-        cursor: "grab", transition: "border-color 0.1s, opacity 0.2s",
+        cursor: "pointer", transition: "border-color 0.1s, opacity 0.2s",
         opacity: isDragging ? 0.4 : 1,
       }}
       onMouseEnter={e => { if (!isDragging) e.currentTarget.style.borderColor = "#454B66"; }}

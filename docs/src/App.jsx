@@ -134,6 +134,7 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
   }, []);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showShootModal, setShowShootModal] = useState(false);
+  const [editShootData, setEditShootData] = useState(null); // null = create mode, object = edit mode
   const [viewMode, setViewMode] = useState("board"); // "board" | "kanban"
   const [parentShootIdForNewProject, setParentShootIdForNewProject] = useState(null);
   const [kanbanRefreshKey, setKanbanRefreshKey] = useState(0);
@@ -155,7 +156,13 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
 
   const handleShootCreated = useCallback(() => {
     setShowShootModal(false);
+    setEditShootData(null);
     setKanbanRefreshKey(k => k + 1);
+  }, []);
+
+  const handleEditShoot = useCallback((shoot) => {
+    setEditShootData(shoot);
+    setShowShootModal(true);
   }, []);
 
   const handleNewProjectWithShoot = useCallback((parentShootId) => {
@@ -166,7 +173,8 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
   return <>
     <Dashboard authUser={authUser} cfg={cfg} onSelectProject={onSelectProject}
       onNewProject={() => { setParentShootIdForNewProject(null); setShowNewProject(true); }}
-      onNewShoot={() => setShowShootModal(true)}
+      onNewShoot={() => { setEditShootData(null); setShowShootModal(true); }}
+      onEditShoot={handleEditShoot}
       onNewProjectWithShoot={handleNewProjectWithShoot}
       onLogout={onLogout}
       toggleTheme={toggleTheme} theme={theme}
@@ -176,7 +184,8 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
       onClose={() => { setShowNewProject(false); setParentShootIdForNewProject(null); }}
       onCreate={handleNewProjectCreate} />}
     {showShootModal && <ShootModal authUser={authUser} cfg={cfg}
-      onClose={() => setShowShootModal(false)} onCreate={handleShootCreated} />}
+      shoot={editShootData}
+      onClose={() => { setShowShootModal(false); setEditShootData(null); }} onCreate={handleShootCreated} />}
   </>;
 }
 

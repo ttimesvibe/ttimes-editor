@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { C, FN } from "../utils/styles.js";
 
 function authHeaders() {
@@ -13,19 +13,75 @@ function avatarColor(name) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
 
-export function ShootModal({ authUser, cfg, onClose, onCreate }) {
-  const [guest, setGuest] = useState("");
-  const [topic, setTopic] = useState("");
-  const [shootDate, setShootDate] = useState("");
-  const [ampm, setAmpm] = useState("오전");
-  const [hour, setHour] = useState("10");
-  const [minute, setMinute] = useState("00");
-  const [tags, setTags] = useState({ studioBooked: false, hasDemo: false });
-  const [roles, setRoles] = useState({ filming: [], scriptEdit: [], videoEdit: [] });
-  const [memo, setMemo] = useState("");
+// ── Role-specific priority ordering ──
+const ROLE_PRIORITY = {
+  filming: ["장민주", "강기훈"],
+  scriptEdit: ["박성수", "배소진", "홍재의", "이재원", "이사민"],
+  videoEdit: ["박의정", "박선희", "장민주", "강채은", "강기훈", "박수형", "허재석", "이소민"],
+};
+
+function getSortedMembers(members, roleKey) {
+  const priorityNames = ROLE_PRIORITY[roleKey] || [];
+  return [...members].sort((a, b) => {
+    const aIdx = priorityNames.indexOf(a.name);
+    const bIdx = priorityNames.indexOf(b.name);
+    if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
+    if (aIdx >= 0) return -1;
+    if (bIdx >= 0) return 1;
+    return 0;
+  });
+}
+
+// ── Parse shoot date for edit mode ──
+function parseShootDateTime(shoot) {
+  if (!shoot?.shootDate) {
+    const today = new Date();
+    return {
+      date: today.toISOString().split("T")[0],
+      ampm: "오전",
+      hour: "10",
+      minute: "00",
+    };
+  }
+  const d = new Date(shoot.shootDate);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  let displayHour, displayAmpm;
+  if (h < 12) {
+    displayAmpm = "오전";
+    displayHour = h === 0 ? "12" : String(h);
+  } else {
+    displayAmpm = "오후";
+    displayHour = h === 12 ? "12" : String(h - 12);
+  }
+  return {
+    date: shoot.shootDate.split("T")[0],
+    ampm: displayAmpm,
+    hour: displayHour,
+    minute: String(m).padStart(2, "0"),
+  };
+}
+
+export function ShootModal({ authUser, cfg, onClose, onCreate, shoot: editShoot }) {
+  const isEdit = !!editShoot;
+  const initTime = parseShootDateTime(editShoot);
+  const defaultDate = editShoot ? initTime.date : new Date().toISOString().split("T")[0];
+
+  const [guest, setGuest] = useState(editShoot?.guest || "");
+  const [topic, setTopic] = useState(editShoot?.topic || "");
+  const [shootDate, setShootDate] = useState(defaultDate);
+  const [ampm, setAmpm] = useState(initTime.ampm);
+  const [hour, setHour] = useState(initTime.hour);
+  const [minute, setMinute] = useState(initTime.minute);
+  const [tags, setTags] = useState(editShoot?.tags || { studioBooked: false, hasDemo: false });
+  const [roles, setRoles] = useState(editShoot?.roles || { filming: [], scriptEdit: [], videoEdit: [] });
+  const [memo, setMemo] = useState(editShoot?.memo || "");
   const [teamMembers, setTeamMembers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState(null); // "filming"|"scriptEdit"|"videoEdit"|null
+  const [openDropdown, setOpenDropdown] = useState(null);
+
+  const dropdownRef = useRef(null);
+  const dateInputRef = useRef(null);
 
   useEffect(() => {
     if (!cfg?.workerUrl) return;
@@ -34,6 +90,20 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
       .then(d => { if (d?.members) setTeamMembers(d.members); })
       .catch(() => {});
   }, [cfg]);
+
+  // ── Outside click to close dropdown ──
+  useEffect(() => {
+    if (!openDropdown) return;
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        // Check if clicked on a "+ 추가" button (don't close if toggling)
+        if (e.target.closest("[data-role-add]")) return;
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openDropdown]);
 
   const toggleTag = (key) => setTags(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -49,6 +119,17 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
     setRoles(prev => ({ ...prev, [roleKey]: (prev[roleKey] || []).filter(r => r.email !== email) }));
   };
 
+  // ── Hours: 오전 8~11, 오후 12~9 ──
+  const hourOptions = ampm === "오전" ? [8, 9, 10, 11] : [12, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // If current hour is not in the new options after AM/PM switch, reset to first valid
+  useEffect(() => {
+    const h = parseInt(hour);
+    if (!hourOptions.includes(h)) {
+      setHour(String(hourOptions[0]));
+    }
+  }, [ampm]);
+
   const handleSubmit = async () => {
     if (!guest || submitting) return;
     setSubmitting(true);
@@ -60,14 +141,20 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
         if (ampm === "오전" && h === 12) h = 0;
         shootDateTime = `${shootDate}T${String(h).padStart(2,"0")}:${minute}:00`;
       }
-      await fetch(`${cfg.workerUrl}/shoots/create`, {
+
+      const endpoint = isEdit ? "/shoots/update" : "/shoots/create";
+      const payload = isEdit
+        ? { id: editShoot.id, guest, topic, shootDate: shootDateTime, tags, roles, memo }
+        : { guest, topic, shootDate: shootDateTime, tags, roles, memo };
+
+      await fetch(`${cfg.workerUrl}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ guest, topic, shootDate: shootDateTime, tags, roles, memo }),
+        body: JSON.stringify(payload),
       });
       onCreate();
     } catch (err) {
-      console.error("촬영 일정 생성 실패:", err);
+      console.error("촬영 일정 저장 실패:", err);
     } finally {
       setSubmitting(false);
     }
@@ -93,7 +180,9 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
       >
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#E8E9ED", letterSpacing: -0.5 }}>촬영 일정 추가</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#E8E9ED", letterSpacing: -0.5 }}>
+            {isEdit ? "촬영 일정 수정" : "촬영 일정 추가"}
+          </div>
           <button onClick={onClose} style={{ width: 28, height: 28, display: "flex", alignItems: "center",
             justifyContent: "center", cursor: "pointer", color: "#5E6380", fontSize: 16,
             border: "1px solid #2E3348", background: "none" }}>✕</button>
@@ -117,7 +206,14 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
         <div style={{ display: "flex", gap: 12, marginBottom: 18 }}>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>촬영 날짜</label>
-            <input type="date" value={shootDate} onChange={e => setShootDate(e.target.value)} style={inputStyle} />
+            <div
+              onClick={() => { try { dateInputRef.current?.showPicker(); } catch {} }}
+              style={{ cursor: "pointer" }}
+            >
+              <input ref={dateInputRef} type="date" value={shootDate}
+                onChange={e => setShootDate(e.target.value)}
+                style={{ ...inputStyle, cursor: "pointer" }} />
+            </div>
           </div>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>촬영 시간</label>
@@ -128,7 +224,7 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
               </select>
               <select value={hour} onChange={e => setHour(e.target.value)}
                 style={{ ...inputStyle, width: "auto", padding: "10px 12px" }}>
-                {[9,10,11,12,1,2,3,4,5].map(h => <option key={h} value={h}>{h}</option>)}
+                {hourOptions.map(h => <option key={h} value={h}>{h}</option>)}
               </select>
               <span style={{ color: "#5E6380", fontWeight: 600 }}>:</span>
               <select value={minute} onChange={e => setMinute(e.target.value)}
@@ -186,7 +282,8 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
                         style={{ fontSize: 9, opacity: 0.6, cursor: "pointer", marginLeft: 2 }}>✕</span>
                     </span>
                   ))}
-                  <span onClick={() => setOpenDropdown(openDropdown === roleKey ? null : roleKey)}
+                  <span data-role-add="true"
+                    onClick={() => setOpenDropdown(openDropdown === roleKey ? null : roleKey)}
                     style={{ fontSize: 11, color: "#5E6380", cursor: "pointer" }}>+ 추가</span>
                 </div>
               </div>
@@ -194,7 +291,7 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
           })}
           {/* Dropdown */}
           {openDropdown && (
-            <div style={{ border: "1px solid #2E3348", background: "#0F1117", marginLeft: 100 }}>
+            <div ref={dropdownRef} style={{ border: "1px solid #2E3348", background: "#0F1117", marginLeft: 100 }}>
               {/* Close button */}
               <div onClick={() => setOpenDropdown(null)}
                 style={{ padding: "6px 14px", fontSize: 11, color: "#8B90A5", cursor: "pointer",
@@ -203,7 +300,7 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                 <span>닫기</span><span>✕</span>
               </div>
-              {teamMembers.map(m => {
+              {getSortedMembers(teamMembers, openDropdown).map(m => {
                 const isSelected = (roles[openDropdown] || []).some(r => r.email === (m.email || m.id));
                 return (
                   <div key={m.email || m.id}
@@ -233,7 +330,7 @@ export function ShootModal({ authUser, cfg, onClose, onCreate }) {
             style={{ background: (!guest || submitting) ? "#555" : "#E8E9ED",
               color: "#0F1117", border: "none", padding: "10px 26px", fontSize: 13,
               fontWeight: 700, cursor: (!guest || submitting) ? "not-allowed" : "pointer", fontFamily: FN }}>
-            {submitting ? "등록 중..." : "일정 등록"}
+            {submitting ? "저장 중..." : isEdit ? "수정 완료" : "일정 등록"}
           </button>
         </div>
       </div>

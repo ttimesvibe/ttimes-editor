@@ -78,7 +78,7 @@ function truncate(str, max) {
 // DASHBOARD
 // ═══════════════════════════════════════════════
 
-export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewShoot, onNewProjectWithShoot, onLogout, toggleTheme, theme, viewMode, setViewMode, kanbanRefreshKey }) {
+export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewShoot, onEditShoot, onNewProjectWithShoot, onLogout, toggleTheme, theme, viewMode, setViewMode, kanbanRefreshKey }) {
   const [projects, setProjects] = useState([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState({ all: 0, wip: 0, done: 0, mine: 0 });
@@ -490,6 +490,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewS
               cfg={cfg}
               onSelectProject={onSelectProject}
               onNewShoot={onNewShoot}
+              onEditShoot={onEditShoot}
               onNewProject={(parentShootId) => onNewProjectWithShoot?.(parentShootId)}
               mineOnly={kanbanMineOnly}
               refreshKey={kanbanRefreshKey}
