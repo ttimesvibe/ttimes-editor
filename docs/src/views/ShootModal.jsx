@@ -311,26 +311,32 @@ export function ShootModal({ authUser, cfg, onClose, onCreate, shoot: editShoot 
             return (
               <div key={roleKey} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", border: "1px solid #2E3348" }}>
-                  <div style={{ width: 100, padding: "10px 14px", fontSize: 13, fontWeight: 700,
-                    color: "#E8E9ED", background: "#1E2230", flexShrink: 0, borderRight: "1px solid #2E3348" }}>
+                  <div data-role-add="true"
+                    onClick={() => setOpenDropdown(isDropdownOpen ? null : roleKey)}
+                    style={{ width: 100, padding: "10px 14px", fontSize: 13, fontWeight: 700,
+                    color: "#E8E9ED", background: "#1E2230", flexShrink: 0, borderRight: "1px solid #2E3348",
+                    cursor: "pointer", transition: "background 0.1s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#252A3C"}
+                    onMouseLeave={e => e.currentTarget.style.background = "#1E2230"}>
                     {ROLE_LABELS[roleKey]}
                   </div>
-                  <div style={{ flex: 1, display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 12px", minHeight: 42, alignItems: "center" }}>
+                  <div data-role-add="true"
+                    onClick={() => setOpenDropdown(isDropdownOpen ? null : roleKey)}
+                    style={{ flex: 1, display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 12px", minHeight: 42, alignItems: "center", cursor: "pointer" }}>
                     {members.map(m => (
-                      <span key={m.email} style={{ display: "flex", alignItems: "center", gap: 5,
+                      <span key={m.email} onClick={(e) => e.stopPropagation()}
+                        style={{ display: "flex", alignItems: "center", gap: 5,
                         fontSize: 12, fontWeight: 600, padding: "3px 10px",
-                        background: color + "15", color: color }}>
+                        background: color + "15", color: color, cursor: "default" }}>
                         <span style={{ width: 18, height: 18, borderRadius: "50%", display: "flex",
                           alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700,
                           background: color + "30", color }}>{m.name.charAt(0)}</span>
                         {m.name}
-                        <span onClick={() => removeRole(roleKey, m.email)}
+                        <span onClick={(e) => { e.stopPropagation(); removeRole(roleKey, m.email); }}
                           style={{ fontSize: 9, opacity: 0.6, cursor: "pointer", marginLeft: 2 }}>✕</span>
                       </span>
                     ))}
-                    <span data-role-add="true"
-                      onClick={() => setOpenDropdown(isDropdownOpen ? null : roleKey)}
-                      style={{ fontSize: 11, color: "#5E6380", cursor: "pointer" }}>+ 추가</span>
+                    <span style={{ fontSize: 11, color: "#5E6380" }}>+ 추가</span>
                   </div>
                 </div>
                 {/* Inline dropdown — directly below this role row */}
