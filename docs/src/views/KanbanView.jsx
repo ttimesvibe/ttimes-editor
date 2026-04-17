@@ -77,7 +77,7 @@ function getMonthKey(iso) {
 // KANBAN VIEW
 // ═══════════════════════════════════════════════
 
-export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewProject }) {
+export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewProject, mineOnly }) {
   const [shoots, setShoots] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -121,6 +121,29 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
     }
   };
 
+  // ── Mine-only filtering helpers ──
+
+  const userEmail = authUser?.email || "";
+
+  function isMyShoot(s) {
+    if (!mineOnly) return true;
+    const allMembers = [
+      ...(s.roles?.filming || []),
+      ...(s.roles?.scriptEdit || []),
+      ...(s.roles?.videoEdit || []),
+    ];
+    return allMembers.some(m => m.email === userEmail) || s.creatorEmail === userEmail;
+  }
+
+  function isMyProject(p) {
+    if (!mineOnly) return true;
+    const editors = p.editors || [];
+    return editors.some(e => {
+      const email = typeof e === "string" ? e : (e.email || e.id || "");
+      return email === userEmail;
+    }) || p.creatorEmail === userEmail;
+  }
+
   // ── Group data by columns ──
 
   const grouped = {};
@@ -128,6 +151,7 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
 
   // Group shoots by stage
   (Array.isArray(shoots) ? shoots : []).forEach(s => {
+    if (!isMyShoot(s)) return;
     if (grouped[s.stage]) grouped[s.stage].push({ type: "shoot", data: s });
   });
 
@@ -141,6 +165,7 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
 
   // Add projects to editing/post-production columns
   projects.forEach(p => {
+    if (!isMyProject(p)) return;
     const step = p.currentStep || p.step || "review";
     if (step === "done") {
       // Done projects go to done column as independent cards

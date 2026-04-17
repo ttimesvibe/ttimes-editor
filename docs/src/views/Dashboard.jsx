@@ -86,6 +86,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewS
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [kanbanMineOnly, setKanbanMineOnly] = useState(false);
 
   // Editor edit popup state
   const [editingProject, setEditingProject] = useState(null); // { id, editors }
@@ -414,7 +415,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewS
               총 {allCount}개 · 진행중 {wipCount} · 완료 {doneCount}
             </p>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
             {/* View Toggle */}
             <div style={{ display: "flex", border: `1px solid ${C.bd}` }}>
               <button
@@ -436,6 +437,31 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewS
                 }}
               >칸반</button>
             </div>
+
+            {/* Mine-only toggle (kanban only) */}
+            {viewMode === "kanban" && (
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
+                <span
+                  onClick={() => setKanbanMineOnly(v => !v)}
+                  style={{
+                    width: 34, height: 18, borderRadius: 9, position: "relative",
+                    background: kanbanMineOnly ? "#4A6CF7" : C.bd,
+                    transition: "background 0.2s", display: "inline-block", flexShrink: 0,
+                  }}
+                >
+                  <span style={{
+                    position: "absolute", top: 2, left: kanbanMineOnly ? 18 : 2,
+                    width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                    transition: "left 0.2s", boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                  }} />
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: kanbanMineOnly ? C.tx : "#5E6380", whiteSpace: "nowrap" }}>
+                  내 프로젝트만
+                </span>
+              </label>
+            )}
+
+            {/* Action button */}
             <button
               onClick={viewMode === "kanban" ? onNewShoot : onNewProject}
               style={{
@@ -463,6 +489,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewS
               onSelectProject={onSelectProject}
               onNewShoot={onNewShoot}
               onNewProject={(parentShootId) => onNewProjectWithShoot?.(parentShootId)}
+              mineOnly={kanbanMineOnly}
             />
           </div>
         )}
