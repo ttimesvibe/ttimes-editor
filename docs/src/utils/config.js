@@ -4,7 +4,7 @@
 
 export const DEFAULT_CONFIG = {
   apiMode: "live",
-  workerUrl: "https://alleditor.ttimes6000.workers.dev",
+  workerUrl: "https://editor.ttimes.workers.dev",
   fillers: ["이제","또","좀","뭐","그냥","약간","진짜","되게","막","이렇게","저렇게"],
   customTerms: {},
   chunkSize: 8000,

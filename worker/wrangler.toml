@@ -1,7 +1,6 @@
-name = "alleditor"
+name = "editor"
 main = "index.js"
 compatibility_date = "2024-01-01"
-account_id = "d556c524bda75cc7c5b5f13b6433ede7"
 
 # ⚠️ [placement] 절대 추가 금지!
 # wrangler deploy 시 대시보드 Region 설정이 덮어씌워짐
@@ -9,7 +8,7 @@ account_id = "d556c524bda75cc7c5b5f13b6433ede7"
 
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "2892f3a4de90429dbcf0eb272578009e"   # editor-session
+id = "9e4f5bb9cd294b86868e4b9d502adbcc"   # editor-sessions
 
 # Secrets (wrangler secret put 으로 설정):
 # - OPENAI_API_KEY
