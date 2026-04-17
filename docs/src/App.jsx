@@ -28,6 +28,7 @@ import { ModifyTab } from "./tabs/ModifyTab.jsx";
 // ── Views ──
 import { Dashboard } from "./views/Dashboard.jsx";
 import { NewProjectModal } from "./views/NewProjectModal.jsx";
+import { ShootModal } from "./views/ShootModal.jsx";
 
 // ═══════════════════════════════════════════════
 // MAIN APP
@@ -132,9 +133,13 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
     });
   }, []);
   const [showNewProject, setShowNewProject] = useState(false);
+  const [showShootModal, setShowShootModal] = useState(false);
+  const [viewMode, setViewMode] = useState("board"); // "board" | "kanban"
+  const [parentShootIdForNewProject, setParentShootIdForNewProject] = useState(null);
 
   const handleNewProjectCreate = useCallback(async (id, fileContent, fileName) => {
     setShowNewProject(false);
+    setParentShootIdForNewProject(null);
     // 원고 텍스트를 manuscript 탭에 저장
     if (fileContent) {
       try {
@@ -146,12 +151,30 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
     onSelectProject(id);
   }, [onSelectProject, cfg]);
 
+  const handleShootCreated = useCallback(() => {
+    setShowShootModal(false);
+    // KanbanView will re-fetch on its own via useEffect
+  }, []);
+
+  const handleNewProjectWithShoot = useCallback((parentShootId) => {
+    setParentShootIdForNewProject(parentShootId || null);
+    setShowNewProject(true);
+  }, []);
+
   return <>
     <Dashboard authUser={authUser} cfg={cfg} onSelectProject={onSelectProject}
-      onNewProject={() => setShowNewProject(true)} onLogout={onLogout}
-      toggleTheme={toggleTheme} theme={theme} />
+      onNewProject={() => { setParentShootIdForNewProject(null); setShowNewProject(true); }}
+      onNewShoot={() => setShowShootModal(true)}
+      onNewProjectWithShoot={handleNewProjectWithShoot}
+      onLogout={onLogout}
+      toggleTheme={toggleTheme} theme={theme}
+      viewMode={viewMode} setViewMode={setViewMode} />
     {showNewProject && <NewProjectModal authUser={authUser} cfg={cfg}
-      onClose={() => setShowNewProject(false)} onCreate={handleNewProjectCreate} />}
+      parentShootId={parentShootIdForNewProject}
+      onClose={() => { setShowNewProject(false); setParentShootIdForNewProject(null); }}
+      onCreate={handleNewProjectCreate} />}
+    {showShootModal && <ShootModal authUser={authUser} cfg={cfg}
+      onClose={() => setShowShootModal(false)} onCreate={handleShootCreated} />}
   </>;
 }
 

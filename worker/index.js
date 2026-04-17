@@ -159,6 +159,43 @@ if (path === "/debug-location") {
         return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
       }
     }
+    // ── 촬영(칸반) 관리 ──
+    if (path === "/shoots" && request.method === "GET") {
+      return await handleShootList(url, user, env, corsHeaders);
+    }
+    if (path === "/shoots/create" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        return await handleShootCreate(body, user, env, corsHeaders);
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+    if (path === "/shoots/update" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        return await handleShootUpdate(body, env, corsHeaders);
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+    if (path === "/shoots/delete" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        return await handleShootDelete(body, env, corsHeaders);
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+    if (path === "/shoots/move-stage" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        return await handleShootMoveStage(body, env, corsHeaders);
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
     if (path === "/team/members" && request.method === "GET") {
       return await handleTeamMembers(env, corsHeaders);
     }
@@ -355,6 +392,7 @@ async function handleLoadTab(id, tab, env, headers) {
 // ═══════════════════════════════════════
 
 const PROJECT_INDEX_KEY = "project_index";
+const SHOOT_INDEX_KEY = "shoot_index";
 
 async function handleProjectList(url, user, env, headers) {
   if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
@@ -410,6 +448,7 @@ async function handleProjectCreate(body, user, env, headers) {
     currentStep: "review",
     stepProgress: [false, false, false, false, false, false, false, false],
     memo: body.memo || "",
+    parentShootId: body.parentShootId || null,
     createdAt: now,
     updatedAt: now,
   };
@@ -419,6 +458,19 @@ async function handleProjectCreate(body, user, env, headers) {
   const index = raw ? JSON.parse(raw) : [];
   index.unshift(project);
   await env.SESSIONS.put(PROJECT_INDEX_KEY, JSON.stringify(index));
+
+  // 부모 촬영 카드에 자식 프로젝트 연결
+  if (body.parentShootId) {
+    const shootRaw = await env.SESSIONS.get(SHOOT_INDEX_KEY);
+    const shoots = shootRaw ? JSON.parse(shootRaw) : [];
+    const shoot = shoots.find(s => s.id === body.parentShootId);
+    if (shoot) {
+      if (!shoot.childProjectIds) shoot.childProjectIds = [];
+      shoot.childProjectIds.push(id);
+      shoot.updatedAt = now;
+      await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(shoots));
+    }
+  }
 
   // s:{id}:meta 생성
   await env.SESSIONS.put(`s:${id}:meta`, JSON.stringify({
@@ -492,6 +544,12 @@ async function handleProjectUpdateStep(body, env, headers) {
   index[idx].updatedAt = new Date().toISOString();
 
   await env.SESSIONS.put(PROJECT_INDEX_KEY, JSON.stringify(index));
+
+  // 자식 프로젝트가 done이 되면 부모 촬영 카드 자동 완료 체크
+  if (step === "done" && index[idx].parentShootId) {
+    await checkAndAutoCompleteShoot(index[idx].parentShootId, env);
+  }
+
   return new Response(JSON.stringify({ success: true }), { headers });
 }
 
@@ -509,6 +567,154 @@ async function handleTeamMembers(env, headers) {
     return new Response(JSON.stringify({ success: true, members: [] }), { headers });
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+  }
+}
+
+// ═══════════════════════════════════════
+// 촬영(칸반) 관리
+// ═══════════════════════════════════════
+
+const VALID_STAGES = ["pre-production", "editing", "post-production", "done"];
+
+async function handleShootList(url, user, env, headers) {
+  if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
+  const raw = await env.SESSIONS.get(SHOOT_INDEX_KEY);
+  const all = raw ? JSON.parse(raw) : [];
+
+  const filter = url.searchParams.get("filter") || "all";
+  const search = url.searchParams.get("search") || "";
+
+  let filtered = all;
+  if (filter === "active") filtered = all.filter(s => s.stage !== "done");
+  else if (filter === "done") filtered = all.filter(s => s.stage === "done");
+
+  if (search) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter(s =>
+      (s.guest || "").toLowerCase().includes(q) ||
+      (s.topic || "").toLowerCase().includes(q) ||
+      (s.memo || "").toLowerCase().includes(q)
+    );
+  }
+
+  const activeCount = all.filter(s => s.stage !== "done").length;
+  const doneCount = all.filter(s => s.stage === "done").length;
+
+  return new Response(JSON.stringify({
+    success: true, shoots: filtered, total: filtered.length,
+    activeCount, doneCount,
+  }), { headers });
+}
+
+async function handleShootCreate(body, user, env, headers) {
+  if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
+  const id = "shoot_" + Array.from(crypto.getRandomValues(new Uint8Array(7))).map(b => b.toString(36)).join("").slice(0, 10);
+  const now = new Date().toISOString();
+
+  const shoot = {
+    id,
+    guest: body.guest || "",
+    topic: body.topic || "",
+    shootDate: body.shootDate || null,
+    stage: "pre-production",
+    tags: body.tags || {},
+    roles: body.roles || { filming: [], scriptEdit: [], videoEdit: [] },
+    childProjectIds: [],
+    memo: body.memo || "",
+    creatorEmail: user.sub,
+    creator: user.name || user.sub,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const raw = await env.SESSIONS.get(SHOOT_INDEX_KEY);
+  const index = raw ? JSON.parse(raw) : [];
+  index.unshift(shoot);
+  await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(index));
+
+  return new Response(JSON.stringify({ success: true, id, shoot }), { headers });
+}
+
+async function handleShootUpdate(body, env, headers) {
+  if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
+  const { id } = body;
+  if (!id) return new Response(JSON.stringify({ error: "id required" }), { status: 400, headers });
+
+  const raw = await env.SESSIONS.get(SHOOT_INDEX_KEY);
+  const index = raw ? JSON.parse(raw) : [];
+  const idx = index.findIndex(s => s.id === id);
+  if (idx < 0) return new Response(JSON.stringify({ error: "shoot not found" }), { status: 404, headers });
+
+  if (body.guest !== undefined) index[idx].guest = body.guest;
+  if (body.topic !== undefined) index[idx].topic = body.topic;
+  if (body.shootDate !== undefined) index[idx].shootDate = body.shootDate;
+  if (body.memo !== undefined) index[idx].memo = body.memo;
+  if (body.stage !== undefined && VALID_STAGES.includes(body.stage)) index[idx].stage = body.stage;
+  if (body.tags !== undefined) index[idx].tags = body.tags;
+  if (body.roles !== undefined) index[idx].roles = body.roles;
+  index[idx].updatedAt = new Date().toISOString();
+
+  await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(index));
+  return new Response(JSON.stringify({ success: true }), { headers });
+}
+
+async function handleShootDelete(body, env, headers) {
+  if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
+  const { id } = body;
+  if (!id) return new Response(JSON.stringify({ error: "id required" }), { status: 400, headers });
+
+  // shoot_index에서 제거
+  const raw = await env.SESSIONS.get(SHOOT_INDEX_KEY);
+  const index = raw ? JSON.parse(raw) : [];
+  const filtered = index.filter(s => s.id !== id);
+  await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(filtered));
+
+  // 연결된 프로젝트의 parentShootId 해제
+  const projRaw = await env.SESSIONS.get(PROJECT_INDEX_KEY);
+  const projects = projRaw ? JSON.parse(projRaw) : [];
+  let projChanged = false;
+  projects.forEach(p => {
+    if (p.parentShootId === id) { p.parentShootId = null; projChanged = true; }
+  });
+  if (projChanged) await env.SESSIONS.put(PROJECT_INDEX_KEY, JSON.stringify(projects));
+
+  return new Response(JSON.stringify({ success: true }), { headers });
+}
+
+async function handleShootMoveStage(body, env, headers) {
+  if (!env.SESSIONS) return new Response(JSON.stringify({ error: "KV not configured" }), { status: 500, headers });
+  const { id, stage } = body;
+  if (!id || !stage) return new Response(JSON.stringify({ error: "id and stage required" }), { status: 400, headers });
+  if (!VALID_STAGES.includes(stage)) return new Response(JSON.stringify({ error: "invalid stage" }), { status: 400, headers });
+
+  const raw = await env.SESSIONS.get(SHOOT_INDEX_KEY);
+  const index = raw ? JSON.parse(raw) : [];
+  const idx = index.findIndex(s => s.id === id);
+  if (idx < 0) return new Response(JSON.stringify({ error: "shoot not found" }), { status: 404, headers });
+
+  index[idx].stage = stage;
+  index[idx].updatedAt = new Date().toISOString();
+  await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(index));
+
+  return new Response(JSON.stringify({ success: true }), { headers });
+}
+
+// 자식 프로젝트 전부 done → 부모 shoot 자동 완료
+async function checkAndAutoCompleteShoot(shootId, env) {
+  if (!shootId) return;
+  const raw = await env.SESSIONS.get(SHOOT_INDEX_KEY);
+  const shoots = raw ? JSON.parse(raw) : [];
+  const shoot = shoots.find(s => s.id === shootId);
+  if (!shoot || shoot.stage === "done") return;
+
+  const projRaw = await env.SESSIONS.get(PROJECT_INDEX_KEY);
+  const projects = projRaw ? JSON.parse(projRaw) : [];
+  const children = projects.filter(p => p.parentShootId === shootId);
+
+  if (children.length > 0 && children.every(p => p.status === "done")) {
+    shoot.stage = "done";
+    shoot.updatedAt = new Date().toISOString();
+    await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(shoots));
   }
 }
 

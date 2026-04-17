@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { C, FN } from "../utils/styles.js";
+import { KanbanView } from "./KanbanView.jsx";
 
 // ── Constants ──
 
@@ -77,7 +78,7 @@ function truncate(str, max) {
 // DASHBOARD
 // ═══════════════════════════════════════════════
 
-export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onLogout, toggleTheme, theme }) {
+export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewShoot, onNewProjectWithShoot, onLogout, toggleTheme, theme, viewMode, setViewMode }) {
   const [projects, setProjects] = useState([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState({ all: 0, wip: 0, done: 0, mine: 0 });
@@ -413,22 +414,61 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onLogo
               총 {allCount}개 · 진행중 {wipCount} · 완료 {doneCount}
             </p>
           </div>
-          <button
-            onClick={onNewProject}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "8px 18px", borderRadius: 8,
-              border: "none", cursor: "pointer",
-              background: "#E8E9ED", color: "#0F1117",
-              fontSize: 13, fontWeight: 600, fontFamily: FN,
-              transition: "opacity 0.15s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-          >
-            + 새 프로젝트
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* View Toggle */}
+            <div style={{ display: "flex", border: `1px solid ${C.bd}` }}>
+              <button
+                onClick={() => setViewMode("board")}
+                style={{
+                  padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  border: "none", fontFamily: FN,
+                  background: viewMode === "board" ? "#E8E9ED" : "transparent",
+                  color: viewMode === "board" ? "#0F1117" : "#5E6380",
+                }}
+              >게시판</button>
+              <button
+                onClick={() => setViewMode("kanban")}
+                style={{
+                  padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  border: "none", fontFamily: FN,
+                  background: viewMode === "kanban" ? "#E8E9ED" : "transparent",
+                  color: viewMode === "kanban" ? "#0F1117" : "#5E6380",
+                }}
+              >칸반</button>
+            </div>
+            <button
+              onClick={viewMode === "kanban" ? onNewShoot : onNewProject}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "8px 18px",
+                border: "none", cursor: "pointer",
+                background: "#E8E9ED", color: "#0F1117",
+                fontSize: 13, fontWeight: 600, fontFamily: FN,
+                transition: "opacity 0.15s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+              onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+            >
+              {viewMode === "kanban" ? "+ 촬영 일정" : "+ 새 프로젝트"}
+            </button>
+          </div>
         </div>
+
+        {/* ── Kanban View ── */}
+        {viewMode === "kanban" && (
+          <div style={{ marginTop: 20 }}>
+            <KanbanView
+              authUser={authUser}
+              cfg={cfg}
+              onSelectProject={onSelectProject}
+              onNewShoot={onNewShoot}
+              onNewProject={(parentShootId) => onNewProjectWithShoot?.(parentShootId)}
+            />
+          </div>
+        )}
+
+        {/* ── Board View ── */}
+        {viewMode !== "kanban" && <>
 
         {/* ── Filter Tabs + Search ── */}
         <div style={{
@@ -537,7 +577,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onLogo
                   borderBottom: `1px solid ${C.bd}`,
                   alignItems: "center",
                   cursor: "pointer",
-                  opacity: isDone ? 0.35 : 1,
+                  opacity: (isDone && filter !== "done") ? 0.35 : 1,
                   transition: "background 0.12s",
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = C.glassHover}
@@ -618,6 +658,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onLogo
         {/* ── Pagination ── */}
         {renderPagination()}
 
+        </>}
       </div>
 
       {/* Editor Edit Modal */}

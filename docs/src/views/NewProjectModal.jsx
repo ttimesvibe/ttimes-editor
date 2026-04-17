@@ -16,7 +16,7 @@ async function readFile(file) {
   return await file.text();
 }
 
-export function NewProjectModal({ authUser, cfg, onClose, onCreate }) {
+export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootId: initialParentShootId }) {
   const [fn, setFn] = useState("");
   const [file, setFile] = useState(null);
   const [memo, setMemo] = useState("");
@@ -25,6 +25,8 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate }) {
   const [submitting, setSubmitting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
+  const [shoots, setShoots] = useState([]);
+  const [selectedShootId, setSelectedShootId] = useState(initialParentShootId || "");
 
   // Auto-add creator as editor on mount
   useEffect(() => {
@@ -39,6 +41,19 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate }) {
     fetch(`${cfg.workerUrl}/team/members`, { headers: authHeaders() })
       .then(r => r.json())
       .then(d => { if (d?.members) setTeamMembers(d.members); })
+      .catch(() => {});
+  }, [cfg]);
+
+  // Fetch shoots for linking dropdown
+  useEffect(() => {
+    if (!cfg?.workerUrl) return;
+    fetch(`${cfg.workerUrl}/shoots`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => {
+        const list = d?.shoots || d || [];
+        // Show shoots in editing stage for linking
+        setShoots(list.filter(s => s.stage === "editing" || s.stage === "pre-production"));
+      })
       .catch(() => {});
   }, [cfg]);
 
@@ -84,6 +99,7 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate }) {
           fn,
           editors: editors.map(e => ({ email: e.id, name: e.name })),
           memo,
+          parentShootId: selectedShootId || null,
         }),
       });
       const data = await res.json();
@@ -250,6 +266,25 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate }) {
             ))}
           </div>
         </div>
+
+        {/* 촬영 연결 */}
+        {shoots.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>촬영 연결 (선택)</label>
+            <select
+              value={selectedShootId}
+              onChange={e => setSelectedShootId(e.target.value)}
+              style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}
+            >
+              <option value="">연결 안 함</option>
+              {shoots.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.guest}{s.shootDate ? ` (${new Date(s.shootDate).getMonth()+1}/${new Date(s.shootDate).getDate()})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* 메모 */}
         <div style={{ marginBottom: 24 }}>
