@@ -2052,6 +2052,7 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           config={cfg}
           currentTab={tab}
           initialData={exportCache.modify}
+          authUser={authUser}
           onSave={(data) => {
             setExportCache(prev => ({ ...prev, modify: data }));
             if (sessionId) apiSaveTab(sessionId, "modify", data, cfg, fn).catch(()=>{});

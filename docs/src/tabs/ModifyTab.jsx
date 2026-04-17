@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { C, FN } from "../utils/styles.js";
 
 // ═══════════════════════════════════════
@@ -18,6 +18,32 @@ const CAT_COLORS = {
   audio:    { color: "#34D399", bg: "rgba(52,211,153,0.1)" },
   etc:      { color: "#6C9CFC", bg: "rgba(108,156,252,0.1)" },
 };
+
+// 편집자 식별 색상 (등장 순서 기준)
+const EDITOR_COLORS = [
+  "#F87171", // 1번째 편집자: 빨강
+  "#60A5FA", // 2번째 편집자: 파랑
+  "#34D399", // 3번째 편집자: 초록
+];
+const EDITOR_COLOR_DEFAULT = "#9CA3AF"; // 4명+ 또는 작성자 정보 없음: 회색
+
+// 카드 목록에서 편집자 → 색상 맵 생성 (createdAt 오름차순 등장 순서)
+function buildEditorColorMap(cards) {
+  const map = {}; // email → color
+  let idx = 0;
+  const sortedCards = [...cards].sort((a, b) => {
+    const aT = a.createdAt || "";
+    const bT = b.createdAt || "";
+    return aT < bT ? -1 : aT > bT ? 1 : 0;
+  });
+  for (const c of sortedCards) {
+    const email = c.createdBy?.email;
+    if (!email || map[email]) continue;
+    map[email] = idx < EDITOR_COLORS.length ? EDITOR_COLORS[idx] : EDITOR_COLOR_DEFAULT;
+    idx++;
+  }
+  return map;
+}
 
 // ═══════════════════════════════════════
 // HELPERS
@@ -210,7 +236,7 @@ function CardForm({ onSubmit, currentTime, onCancel }) {
 // ═══════════════════════════════════════
 // ReviewCard
 // ═══════════════════════════════════════
-function ReviewCard({ card, onCheck, onDelete, onSeek, onEdit, images, currentTime }) {
+function ReviewCard({ card, onCheck, onDelete, onSeek, onEdit, images, currentTime, editorColor }) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(card.content);
   const [editCategory, setEditCategory] = useState(card.category);
@@ -219,13 +245,15 @@ function ReviewCard({ card, onCheck, onDelete, onSeek, onEdit, images, currentTi
   const cat = CATEGORIES.find(c => c.value === (editing ? editCategory : card.category)) || CATEGORIES[4];
   const catColor = CAT_COLORS[editing ? editCategory : card.category] || CAT_COLORS.etc;
   const imgSrc = images[card.id];
+  const leftBarColor = editorColor || "#9CA3AF";
+  const authorName = card.createdBy?.name || card.createdBy?.email || "작성자 정보 없음";
 
   const startEdit = () => { setEditText(card.content); setEditCategory(card.category); setEditTsStart(card.timestamp); setEditTsEnd(card.timestampEnd); setEditing(true); };
   const cancelEdit = () => { setEditText(card.content); setEditCategory(card.category); setEditTsStart(card.timestamp); setEditTsEnd(card.timestampEnd); setEditing(false); };
   const saveEdit = () => { onEdit(card.id, { content: editText, category: editCategory, timestamp: editTsStart, timestampEnd: editTsEnd }); setEditing(false); };
 
   return (
-    <div style={{ background: card.checked ? "rgba(0,0,0,0.2)" : C.sf, border: `1px solid ${card.checked ? "rgba(255,255,255,0.05)" : C.bd}`, borderRadius: 12, padding: 16, marginBottom: 10, opacity: card.checked ? 0.65 : 1, transition: "all 0.2s", borderLeft: `3px solid ${catColor.color}` }}>
+    <div title={`작성자: ${authorName}`} style={{ background: card.checked ? "rgba(0,0,0,0.2)" : C.sf, border: `1px solid ${card.checked ? "rgba(255,255,255,0.05)" : C.bd}`, borderRadius: 12, padding: 16, marginBottom: 10, opacity: card.checked ? 0.65 : 1, transition: "all 0.2s", borderLeft: `3px solid ${leftBarColor}` }}>
       {/* 헤더 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -295,7 +323,7 @@ function ReviewCard({ card, onCheck, onDelete, onSeek, onEdit, images, currentTi
 // ═══════════════════════════════════════
 // ModifyTab (main export)
 // ═══════════════════════════════════════
-export function ModifyTab({ sessionId, config, onSave, currentTab, initialData }) {
+export function ModifyTab({ sessionId, config, onSave, currentTab, initialData, authUser }) {
   const [view, setView] = useState("home"); // home | review
   const [videoUrl, setVideoUrl] = useState("");
   const [videoId, setVideoId] = useState("");
@@ -424,7 +452,11 @@ export function ModifyTab({ sessionId, config, onSave, currentTab, initialData }
   }
 
   async function handleAddCard(card) {
-    const newCards = [...cards, card].sort((a, b) => a.timestamp - b.timestamp);
+    // 작성자 정보 주입 (편집자 식별용)
+    const cardWithAuthor = authUser
+      ? { ...card, createdBy: { email: authUser.email, name: authUser.name || authUser.email } }
+      : card;
+    const newCards = [...cards, cardWithAuthor].sort((a, b) => a.timestamp - b.timestamp);
     setCards(newCards);
     setShowForm(false);
     // 이미지 업로드
@@ -490,6 +522,9 @@ export function ModifyTab({ sessionId, config, onSave, currentTab, initialData }
   });
 
   const stats = { total: cards.length, checked: cards.filter(c => c.checked).length };
+
+  // 편집자 → 색상 맵 (카드 등장 순서대로)
+  const editorColorMap = useMemo(() => buildEditorColorMap(cards), [cards]);
 
   // ═══════════════════════════════════════
   // HOME VIEW
@@ -573,6 +608,7 @@ export function ModifyTab({ sessionId, config, onSave, currentTab, initialData }
         {/* 카드 리스트 */}
         {filteredCards.map(card => (
           <ReviewCard key={card.id} card={card} images={images} currentTime={currentTime}
+            editorColor={editorColorMap[card.createdBy?.email] || EDITOR_COLOR_DEFAULT}
             onCheck={handleCheck} onEdit={handleEdit} onDelete={handleDelete} onSeek={handleSeek} />
         ))}
 
