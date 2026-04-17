@@ -81,7 +81,9 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
   const [shoots, setShoots] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [expandedDone, setExpandedDone] = useState({}); // { "2026-04": true }
+  const [expandedDone, setExpandedDone] = useState({});
+  const [dragOverCol, setDragOverCol] = useState(null); // column key being hovered
+  const [draggingId, setDraggingId] = useState(null);   // shoot id being dragged
 
   // ── Fetch data ──
 
@@ -109,6 +111,8 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
   // ── Stage move ──
 
   const moveShootStage = async (shootId, newStage) => {
+    // Optimistic update
+    setShoots(prev => prev.map(s => s.id === shootId ? { ...s, stage: newStage } : s));
     try {
       await fetch(`${cfg.workerUrl}/shoots/move-stage`, {
         method: "POST",
@@ -118,6 +122,45 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
       fetchData();
     } catch (err) {
       console.error("stage 이동 실패:", err);
+      fetchData(); // revert on error
+    }
+  };
+
+  // ── Drag & Drop handlers ──
+
+  const handleDragStart = (e, shootId) => {
+    e.dataTransfer.setData("text/plain", shootId);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggingId(shootId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDragOverCol(null);
+  };
+
+  const handleDragOver = (e, colKey) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverCol !== colKey) setDragOverCol(colKey);
+  };
+
+  const handleDragLeave = (e, colKey) => {
+    // Only clear if actually leaving the column (not entering a child)
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      if (dragOverCol === colKey) setDragOverCol(null);
+    }
+  };
+
+  const handleDrop = (e, colKey) => {
+    e.preventDefault();
+    setDragOverCol(null);
+    const shootId = e.dataTransfer.getData("text/plain");
+    if (!shootId) return;
+    // Find current stage
+    const shoot = (Array.isArray(shoots) ? shoots : []).find(s => s.id === shootId);
+    if (shoot && shoot.stage !== colKey) {
+      moveShootStage(shootId, colKey);
     }
   };
 
@@ -149,13 +192,11 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
   const grouped = {};
   COLUMNS.forEach(col => { grouped[col.key] = []; });
 
-  // Group shoots by stage
   (Array.isArray(shoots) ? shoots : []).forEach(s => {
     if (!isMyShoot(s)) return;
     if (grouped[s.stage]) grouped[s.stage].push({ type: "shoot", data: s });
   });
 
-  // Build set of project IDs that are children of shoots in editing stage
   const childIdSet = new Set();
   (Array.isArray(shoots) ? shoots : []).forEach(s => {
     if (s.stage === "editing" && s.childProjectIds?.length) {
@@ -163,28 +204,18 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
     }
   });
 
-  // Add projects to editing/post-production columns
   projects.forEach(p => {
     if (!isMyProject(p)) return;
     const step = p.currentStep || p.step || "review";
     if (step === "done") {
-      // Done projects go to done column as independent cards
-      if (!p.parentShootId) {
-        grouped["done"].push({ type: "project", data: p });
-      }
+      if (!p.parentShootId) grouped["done"].push({ type: "project", data: p });
     } else {
-      // Determine if in editing or post-production
-      // Projects in post-production stage: those with all 8 tabs done go to video editing
-      // For now, use project's own stage or determine by step
       const isPostProd = p.stage === "post-production";
-
       if (isPostProd) {
         grouped["post-production"].push({ type: "project", data: p });
       } else if (!childIdSet.has(p.id)) {
-        // Independent project (not a child of an editing-stage shoot) → editing column
         grouped["editing"].push({ type: "project", data: p });
       }
-      // Child projects shown inside their parent shoot card, not standalone
     }
   });
 
@@ -192,7 +223,6 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
   const colCounts = {};
   COLUMNS.forEach(col => {
     if (col.key === "editing") {
-      // Count individual project cards + shoot bundles
       const shootsInEditing = grouped["editing"].filter(i => i.type === "shoot");
       const childCount = shootsInEditing.reduce((sum, i) => sum + (i.data.childProjectIds?.length || 0), 0);
       const independentProjects = grouped["editing"].filter(i => i.type === "project").length;
@@ -222,143 +252,163 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
 
   return (
     <div style={{ display: "flex", gap: 0, overflowX: "auto", height: "calc(100vh - 180px)" }}>
-      {COLUMNS.map(col => (
-        <div key={col.key} style={{
-          flex: 1, minWidth: 240,
-          borderRight: `1px solid ${C.bd}`,
-          display: "flex", flexDirection: "column",
-        }}>
-          {/* Column Header */}
-          <div style={{
-            padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: col.color, display: "inline-block" }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{col.label}</span>
-            </div>
-            <span style={{
-              fontSize: 11, color: "#5E6380", background: C.glass, padding: "2px 8px", borderRadius: 10,
-            }}>{colCounts[col.key]}</span>
-          </div>
-
-          {/* Column Body */}
-          <div style={{ padding: "0 10px 10px", display: "flex", flexDirection: "column", gap: 8, flex: 1, overflowY: "auto" }}>
-
-            {/* Pre-production: Add button */}
-            {col.key === "pre-production" && (
-              <div onClick={onNewShoot} style={{
-                border: `1px dashed ${C.bd}`, padding: 10, textAlign: "center",
-                fontSize: 12, color: "#5E6380", cursor: "pointer",
-              }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "#454B66"; e.currentTarget.style.color = "#8B90A5"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = C.bd; e.currentTarget.style.color = "#5E6380"; }}
-              >
-                + 촬영 일정 추가
+      {COLUMNS.map(col => {
+        const isOver = dragOverCol === col.key;
+        return (
+          <div
+            key={col.key}
+            onDragOver={(e) => handleDragOver(e, col.key)}
+            onDragLeave={(e) => handleDragLeave(e, col.key)}
+            onDrop={(e) => handleDrop(e, col.key)}
+            style={{
+              flex: 1, minWidth: 240,
+              borderRight: `1px solid ${C.bd}`,
+              display: "flex", flexDirection: "column",
+              background: isOver ? (col.color + "08") : "transparent",
+              transition: "background 0.15s",
+            }}
+          >
+            {/* Column Header */}
+            <div style={{
+              padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: col.color, display: "inline-block" }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{col.label}</span>
               </div>
+              <span style={{
+                fontSize: 11, color: "#5E6380", background: C.glass, padding: "2px 8px", borderRadius: 10,
+              }}>{colCounts[col.key]}</span>
+            </div>
+
+            {/* Drop indicator bar */}
+            {isOver && (
+              <div style={{ height: 2, background: col.color, margin: "0 10px", borderRadius: 1, flexShrink: 0 }} />
             )}
 
-            {/* Render items */}
-            {col.key !== "done" && grouped[col.key].map((item, idx) => {
-              if (item.type === "shoot") {
-                if (col.key === "pre-production") {
-                  return <ShootCard key={item.data.id} shoot={item.data} onMoveStage={moveShootStage} />;
-                }
-                if (col.key === "editing") {
-                  // Transition card with children
-                  const children = projects.filter(p => item.data.childProjectIds?.includes(p.id));
+            {/* Column Body */}
+            <div style={{ padding: "0 10px 10px", display: "flex", flexDirection: "column", gap: 8, flex: 1, overflowY: "auto" }}>
+
+              {col.key === "pre-production" && (
+                <div onClick={onNewShoot} style={{
+                  border: `1px dashed ${C.bd}`, padding: 10, textAlign: "center",
+                  fontSize: 12, color: "#5E6380", cursor: "pointer",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#454B66"; e.currentTarget.style.color = "#8B90A5"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.bd; e.currentTarget.style.color = "#5E6380"; }}
+                >
+                  + 촬영 일정 추가
+                </div>
+              )}
+
+              {col.key !== "done" && grouped[col.key].map((item) => {
+                if (item.type === "shoot") {
+                  if (col.key === "editing") {
+                    const children = projects.filter(p => item.data.childProjectIds?.includes(p.id));
+                    return (
+                      <TransitionCard
+                        key={item.data.id}
+                        shoot={item.data}
+                        children={children}
+                        onSelectProject={onSelectProject}
+                        onNewProject={() => onNewProject?.(item.data.id)}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                        isDragging={draggingId === item.data.id}
+                      />
+                    );
+                  }
                   return (
-                    <TransitionCard
+                    <ShootCard
                       key={item.data.id}
                       shoot={item.data}
-                      children={children}
-                      onSelectProject={onSelectProject}
-                      onNewProject={() => onNewProject?.(item.data.id)}
-                      onMoveStage={moveShootStage}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      isDragging={draggingId === item.data.id}
                     />
                   );
                 }
-              }
-              if (item.type === "project") {
-                return (
-                  <ProjectCard
-                    key={item.data.id}
-                    project={item.data}
-                    shoots={shoots}
-                    onClick={() => onSelectProject(item.data.id)}
-                  />
-                );
-              }
-              return null;
-            })}
+                if (item.type === "project") {
+                  return (
+                    <ProjectCard
+                      key={item.data.id}
+                      project={item.data}
+                      shoots={shoots}
+                      onClick={() => onSelectProject(item.data.id)}
+                    />
+                  );
+                }
+                return null;
+              })}
 
-            {/* Done column: monthly folds */}
-            {col.key === "done" && doneMonths.map(mk => {
-              const items = doneByMonth[mk];
-              const label = mk === thisMonth ? "이번 달" : (() => {
-                const [y, m] = mk.split("-");
-                const diff = (now.getFullYear() * 12 + now.getMonth()) - (parseInt(y) * 12 + (parseInt(m) - 1));
-                if (diff === 1) return "지난 달";
-                return `${y}년 ${parseInt(m)}월`;
-              })();
-              const isExpanded = expandedDone[mk];
-              return (
-                <div key={mk}>
-                  <div
-                    onClick={() => setExpandedDone(prev => ({ ...prev, [mk]: !prev[mk] }))}
-                    style={{
-                      padding: "10px 16px", fontSize: 12, color: "#5E6380", cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      borderTop: `1px solid ${C.bd}`, marginTop: 8,
-                    }}
-                  >
-                    <span>{label} {items.length}건</span>
-                    <span>{isExpanded ? "▾" : "▸"}</span>
-                  </div>
-                  {isExpanded && items.map(item => {
-                    if (item.type === "shoot") {
+              {col.key === "done" && doneMonths.map(mk => {
+                const items = doneByMonth[mk];
+                const label = mk === thisMonth ? "이번 달" : (() => {
+                  const [y, m] = mk.split("-");
+                  const diff = (now.getFullYear() * 12 + now.getMonth()) - (parseInt(y) * 12 + (parseInt(m) - 1));
+                  if (diff === 1) return "지난 달";
+                  return `${y}년 ${parseInt(m)}월`;
+                })();
+                const isExpanded = expandedDone[mk];
+                return (
+                  <div key={mk}>
+                    <div
+                      onClick={() => setExpandedDone(prev => ({ ...prev, [mk]: !prev[mk] }))}
+                      style={{
+                        padding: "10px 16px", fontSize: 12, color: "#5E6380", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        borderTop: `1px solid ${C.bd}`, marginTop: 8,
+                      }}
+                    >
+                      <span>{label} {items.length}건</span>
+                      <span>{isExpanded ? "▾" : "▸"}</span>
+                    </div>
+                    {isExpanded && items.map(item => {
+                      if (item.type === "shoot") {
+                        return (
+                          <div key={item.data.id} style={{
+                            background: C.sf, border: `1px solid ${C.bd}`, padding: 12, marginBottom: 6,
+                            opacity: 0.6,
+                          }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{item.data.guest}</div>
+                            <div style={{ fontSize: 11, color: "#5E6380", marginTop: 2 }}>{item.data.topic}</div>
+                          </div>
+                        );
+                      }
                       return (
-                        <div key={item.data.id} style={{
+                        <div key={item.data.id} onClick={() => onSelectProject(item.data.id)} style={{
                           background: C.sf, border: `1px solid ${C.bd}`, padding: 12, marginBottom: 6,
-                          opacity: 0.6,
-                        }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{item.data.guest}</div>
-                          <div style={{ fontSize: 11, color: "#5E6380", marginTop: 2 }}>{item.data.topic}</div>
+                          cursor: "pointer", opacity: 0.6,
+                        }}
+                          onMouseEnter={e => e.currentTarget.style.borderColor = "#454B66"}
+                          onMouseLeave={e => e.currentTarget.style.borderColor = C.bd}
+                        >
+                          <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>
+                            {item.data.fn || item.data.filename || item.data.name || "제목 없음"}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#5E6380", marginTop: 2 }}>
+                            {formatShootDate(item.data.updatedAt || item.data.createdAt)}
+                          </div>
                         </div>
                       );
-                    }
-                    return (
-                      <div key={item.data.id} onClick={() => onSelectProject(item.data.id)} style={{
-                        background: C.sf, border: `1px solid ${C.bd}`, padding: 12, marginBottom: 6,
-                        cursor: "pointer", opacity: 0.6,
-                      }}
-                        onMouseEnter={e => e.currentTarget.style.borderColor = "#454B66"}
-                        onMouseLeave={e => e.currentTarget.style.borderColor = C.bd}
-                      >
-                        <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>
-                          {item.data.fn || item.data.filename || item.data.name || "제목 없음"}
-                        </div>
-                        <div style={{ fontSize: 11, color: "#5E6380", marginTop: 2 }}>
-                          {formatShootDate(item.data.updatedAt || item.data.createdAt)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+                    })}
+                  </div>
+                );
+              })}
 
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════
-// SHOOT CARD (촬영 예정)
+// SHOOT CARD (촬영 예정 등)
 // ═══════════════════════════════════════════════
 
-function ShootCard({ shoot, onMoveStage }) {
+function ShootCard({ shoot, onDragStart, onDragEnd, isDragging }) {
   const allRoles = [
     ...(shoot.roles?.filming || []),
     ...(shoot.roles?.scriptEdit || []),
@@ -366,11 +416,16 @@ function ShootCard({ shoot, onMoveStage }) {
   ];
 
   return (
-    <div style={{
-      background: C.sf, border: `1px solid ${C.bd}`, padding: 14,
-      cursor: "pointer", transition: "border-color 0.1s",
-    }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = "#454B66"}
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, shoot.id)}
+      onDragEnd={onDragEnd}
+      style={{
+        background: C.sf, border: `1px solid ${C.bd}`, padding: 14,
+        cursor: "grab", transition: "border-color 0.1s, opacity 0.2s",
+        opacity: isDragging ? 0.4 : 1,
+      }}
+      onMouseEnter={e => { if (!isDragging) e.currentTarget.style.borderColor = "#454B66"; }}
       onMouseLeave={e => e.currentTarget.style.borderColor = C.bd}
     >
       {/* Tags */}
@@ -435,22 +490,6 @@ function ShootCard({ shoot, onMoveStage }) {
           })}
         </div>
       )}
-
-      {/* Move to editing button */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onMoveStage(shoot.id, "editing"); }}
-        style={{
-          width: "100%", marginTop: 10, padding: "6px 0",
-          background: "none", border: `1px solid #A78BFA40`,
-          color: "#A78BFA", fontSize: 11, fontWeight: 600,
-          cursor: "pointer", fontFamily: FN,
-          transition: "background 0.15s",
-        }}
-        onMouseEnter={e => e.currentTarget.style.background = "#A78BFA15"}
-        onMouseLeave={e => e.currentTarget.style.background = "none"}
-      >
-        촬영 완료 → 원고 편집
-      </button>
     </div>
   );
 }
@@ -459,29 +498,27 @@ function ShootCard({ shoot, onMoveStage }) {
 // TRANSITION CARD (원고 편집 — 촬영에서 넘어온 묶음)
 // ═══════════════════════════════════════════════
 
-function TransitionCard({ shoot, children, onSelectProject, onNewProject, onMoveStage }) {
+function TransitionCard({ shoot, children, onSelectProject, onNewProject, onDragStart, onDragEnd, isDragging }) {
   return (
-    <div style={{
-      background: C.sf, border: `1px solid #7C3AED40`,
-      borderLeft: "3px solid #A78BFA", padding: 14,
-    }}>
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, shoot.id)}
+      onDragEnd={onDragEnd}
+      style={{
+        background: C.sf, border: `1px solid #7C3AED40`,
+        borderLeft: "3px solid #A78BFA", padding: 14,
+        cursor: "grab", transition: "opacity 0.2s",
+        opacity: isDragging ? 0.4 : 1,
+      }}
+    >
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: "#A78BFA" }}>
           {shoot.guest} ({shortShootDate(shoot.shootDate)} 촬영)
         </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 10, color: "#5E6380" }}>
-            {children.length > 0 ? `${children.length}편` : "편 미정"}
-          </span>
-          <span
-            onClick={() => onMoveStage?.(shoot.id, "pre-production")}
-            title="촬영 예정으로 되돌리기"
-            style={{ fontSize: 10, color: "#5E6380", cursor: "pointer", padding: "2px 6px", border: `1px solid ${C.bd}`, borderRadius: 2 }}
-            onMouseEnter={e => { e.currentTarget.style.color = "#A78BFA"; e.currentTarget.style.borderColor = "#A78BFA50"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "#5E6380"; e.currentTarget.style.borderColor = C.bd; }}
-          >↩ 되돌리기</span>
-        </div>
+        <span style={{ fontSize: 10, color: "#5E6380" }}>
+          {children.length > 0 ? `${children.length}편` : "편 미정"}
+        </span>
       </div>
 
       {/* Child projects */}
@@ -493,7 +530,8 @@ function TransitionCard({ shoot, children, onSelectProject, onNewProject, onMove
             const stepIdx = STEP_KEYS.indexOf(step);
             return (
               <div key={p.id}
-                onClick={() => onSelectProject(p.id)}
+                onClick={(e) => { e.stopPropagation(); onSelectProject(p.id); }}
+                draggable={false}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
                   padding: "8px 10px", background: "#0F1117", border: `1px solid ${C.bd}`,
@@ -528,6 +566,7 @@ function TransitionCard({ shoot, children, onSelectProject, onNewProject, onMove
       {/* Add project button */}
       <div
         onClick={(e) => { e.stopPropagation(); onNewProject?.(); }}
+        draggable={false}
         style={{
           marginTop: 8, padding: "6px 0", textAlign: "center",
           border: `1px dashed ${C.bd}`, fontSize: 11, color: "#5E6380",
@@ -552,7 +591,6 @@ function ProjectCard({ project, shoots, onClick }) {
   const stepIdx = STEP_KEYS.indexOf(step);
   const editors = project.editors || [];
 
-  // Find parent shoot for origin label
   const parentShoot = project.parentShootId
     ? (Array.isArray(shoots) ? shoots : []).find(s => s.id === project.parentShootId)
     : null;
@@ -565,7 +603,6 @@ function ProjectCard({ project, shoots, onClick }) {
       onMouseEnter={e => e.currentTarget.style.borderColor = "#454B66"}
       onMouseLeave={e => e.currentTarget.style.borderColor = C.bd}
     >
-      {/* Origin */}
       {parentShoot && (
         <div style={{ fontSize: 10, color: "#5E6380", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.bd, display: "inline-block" }} />
@@ -573,12 +610,10 @@ function ProjectCard({ project, shoots, onClick }) {
         </div>
       )}
 
-      {/* Title */}
       <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 6 }}>
         {project.fn || project.filename || project.name || "제목 없음"}
       </div>
 
-      {/* Step badge */}
       <span style={{
         fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 2,
         display: "inline-block", marginBottom: 8,
@@ -587,7 +622,6 @@ function ProjectCard({ project, shoots, onClick }) {
         {STEP_LABELS[step] || step}
       </span>
 
-      {/* Bottom: date + avatars */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 11, color: "#5E6380" }}>
           {project.updatedAt ? shortShootDate(project.updatedAt) : shortShootDate(project.createdAt)}
@@ -611,7 +645,6 @@ function ProjectCard({ project, shoots, onClick }) {
         </div>
       </div>
 
-      {/* Progress bar */}
       <div style={{ display: "flex", gap: 2, marginTop: 8 }}>
         {STEP_KEYS.map((_, i) => (
           <div key={i} style={{
