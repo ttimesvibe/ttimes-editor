@@ -18,7 +18,7 @@ const ROLE_PRIORITY = {
   filming: ["장민주", "강기훈"],
   progress: ["홍재의", "배소진", "이재원", "이사민"],
   scriptEdit: ["박성수", "배소진", "홍재의", "이재원", "이사민"],
-  videoEdit: ["박의정", "박선희", "장민주", "강채은", "강기훈", "박수형", "이소민", "허재석"],
+  videoEdit: ["박의정", "박선희", "장민주", "강채은", "강기훈", "박수형", "허재석", "이소민"],
 };
 
 function getSortedMembers(members, roleKey) {
