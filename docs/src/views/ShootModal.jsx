@@ -211,7 +211,6 @@ export function ShootModal({ authUser, cfg, onClose, onCreate, shoot: editShoot 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200,
       display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={onClose}
     >
       <div style={{ background: "#181B25", border: "1px solid #2E3348", padding: 28,
         width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", fontFamily: FN }}
