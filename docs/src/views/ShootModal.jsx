@@ -176,7 +176,8 @@ export function ShootModal({ authUser, cfg, onClose, onCreate, shoot: editShoot 
         let h = parseInt(hour);
         if (ampm === "오후" && h < 12) h += 12;
         if (ampm === "오전" && h === 12) h = 0;
-        shootDateTime = `${shootDate}T${String(h).padStart(2,"0")}:${minute}:00`;
+        // KST 오프셋 명시 (+09:00) — Worker가 UTC로 잘못 해석하는 문제 방지
+        shootDateTime = `${shootDate}T${String(h).padStart(2,"0")}:${minute}:00+09:00`;
       }
 
       const endpoint = isEdit ? "/shoots/update" : "/shoots/create";
