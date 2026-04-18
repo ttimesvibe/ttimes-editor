@@ -78,7 +78,7 @@ function truncate(str, max) {
 // DASHBOARD
 // ═══════════════════════════════════════════════
 
-export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewShoot, onEditShoot, onNewProjectWithShoot, onLogout, toggleTheme, theme, viewMode, setViewMode, kanbanRefreshKey }) {
+export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onEditProject, onNewShoot, onEditShoot, onNewProjectWithShoot, onLogout, toggleTheme, theme, viewMode, setViewMode, kanbanRefreshKey, projectRefreshKey }) {
   const [projects, setProjects] = useState([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState({ all: 0, wip: 0, done: 0, mine: 0 });
@@ -131,7 +131,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewS
     } finally {
       setLoading(false);
     }
-  }, [cfg, page, filter, search]);
+  }, [cfg, page, filter, search, projectRefreshKey]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
@@ -242,7 +242,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewS
     );
   }
 
-  function renderEditors(editors, projId) {
+  function renderEditors(editors, projId, project) {
     const names = (editors && editors.length > 0)
       ? editors.map(e => typeof e === "string" ? e : (e.name || e.email || "?"))
       : [];
@@ -257,9 +257,13 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewS
         style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
         onClick={(e) => {
           e.stopPropagation();
-          setEditingProject({ id: projId, editors: editors || [] });
+          if (onEditProject && project) {
+            onEditProject(project);
+          } else {
+            setEditingProject({ id: projId, editors: editors || [] });
+          }
         }}
-        title="편집자 수정"
+        title="프로젝트 수정"
       >
         {names.length > 0 ? (
           <>
@@ -632,7 +636,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onNewS
                 </span>
 
                 {/* Editors */}
-                {renderEditors(editors, proj.id)}
+                {renderEditors(editors, proj.id, proj)}
 
                 {/* Current Step */}
                 <span style={{ fontSize: 12, color: "#8B8FA3" }}>

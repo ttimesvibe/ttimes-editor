@@ -16,24 +16,34 @@ async function readFile(file) {
   return await file.text();
 }
 
-export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootId: initialParentShootId }) {
-  const [fn, setFn] = useState("");
+export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootId: initialParentShootId, project: editProject }) {
+  const isEdit = !!editProject;
+  const [fn, setFn] = useState(editProject?.fn || editProject?.filename || editProject?.name || "");
   const [file, setFile] = useState(null);
-  const [memo, setMemo] = useState("");
+  const [memo, setMemo] = useState(editProject?.memo || "");
   const [editors, setEditors] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
   const [shoots, setShoots] = useState([]);
-  const [selectedShootId, setSelectedShootId] = useState(initialParentShootId || "");
+  const [selectedShootId, setSelectedShootId] = useState(editProject?.parentShootId || initialParentShootId || "");
 
-  // Auto-add creator as editor on mount
+  // Auto-add creator/existing editors on mount
   useEffect(() => {
-    if (authUser) {
+    if (isEdit && editProject?.editors) {
+      // Pre-fill existing editors
+      const list = (editProject.editors || []).map(e => {
+        if (typeof e === "string") return { id: e, name: e, removable: true };
+        const id = e.email || e.id;
+        const isCreator = editProject.creatorEmail && id === editProject.creatorEmail;
+        return { id, name: e.name || id, removable: !isCreator };
+      });
+      setEditors(list);
+    } else if (authUser) {
       setEditors([{ id: authUser.id || authUser.email, name: authUser.name || authUser.email, removable: false }]);
     }
-  }, [authUser]);
+  }, [authUser, isEdit, editProject]);
 
   // Fetch team members
   useEffect(() => {
@@ -51,11 +61,14 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootI
       .then(r => r.json())
       .then(d => {
         const list = d?.shoots || d || [];
-        // Show shoots in editing stage for linking
-        setShoots(list.filter(s => s.stage === "editing" || s.stage === "pre-production"));
+        // Show shoots in editing/pre-production + currently-linked (for edit mode)
+        const linkedId = editProject?.parentShootId;
+        setShoots(list.filter(s =>
+          s.stage === "editing" || s.stage === "pre-production" || s.id === linkedId
+        ));
       })
       .catch(() => {});
-  }, [cfg]);
+  }, [cfg, editProject]);
 
   const handleFile = (f) => {
     if (!f) return;
@@ -88,26 +101,42 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootI
   };
 
   const handleSubmit = async () => {
-    if (!fn || !file || submitting) return;
+    if (!fn || submitting) return;
+    if (!isEdit && !file) return;
     setSubmitting(true);
     try {
-      const fileContent = await readFile(file);
-      const res = await fetch(`${cfg.workerUrl}/projects/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({
-          fn,
-          editors: editors.map(e => ({ email: e.id, name: e.name })),
-          memo,
-          parentShootId: selectedShootId || null,
-        }),
-      });
-      const data = await res.json();
-      if (data?.id) {
-        onCreate(data.id, fileContent, file.name);
+      if (isEdit) {
+        await fetch(`${cfg.workerUrl}/projects/update`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({
+            id: editProject.id,
+            fn,
+            editors: editors.map(e => ({ email: e.id, name: e.name })),
+            memo,
+            parentShootId: selectedShootId || null,
+          }),
+        });
+        onCreate(editProject.id);
+      } else {
+        const fileContent = await readFile(file);
+        const res = await fetch(`${cfg.workerUrl}/projects/create`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({
+            fn,
+            editors: editors.map(e => ({ email: e.id, name: e.name })),
+            memo,
+            parentShootId: selectedShootId || null,
+          }),
+        });
+        const data = await res.json();
+        if (data?.id) {
+          onCreate(data.id, fileContent, file.name);
+        }
       }
     } catch (err) {
-      console.error("프로젝트 생성 실패:", err);
+      console.error("프로젝트 저장 실패:", err);
     } finally {
       setSubmitting(false);
     }
@@ -143,7 +172,7 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootI
       >
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>새 프로젝트</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>{isEdit ? "프로젝트 수정" : "새 프로젝트"}</div>
           <button
             onClick={onClose}
             style={{
@@ -168,7 +197,8 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootI
           />
         </div>
 
-        {/* 원고 파일 */}
+        {/* 원고 파일 — 생성 시에만 표시 */}
+        {!isEdit && (
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>원고 파일</label>
           <div
@@ -204,6 +234,7 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootI
             onChange={handleFileInput}
           />
         </div>
+        )}
 
         {/* 생성자 */}
         <div style={{ marginBottom: 16 }}>
@@ -303,17 +334,17 @@ export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootI
         {/* Submit */}
         <button
           onClick={handleSubmit}
-          disabled={!fn || !file || submitting}
+          disabled={!fn || (!isEdit && !file) || submitting}
           style={{
             width: "100%", padding: "12px 0", borderRadius: 8, border: "none",
-            background: (!fn || !file || submitting)
+            background: (!fn || (!isEdit && !file) || submitting)
               ? "rgba(74,108,247,0.3)"
               : "linear-gradient(135deg, #7C3AED, #4A6CF7)",
-            color: "#fff", fontSize: 15, fontWeight: 700, cursor: (!fn || !file || submitting) ? "not-allowed" : "pointer",
+            color: "#fff", fontSize: 15, fontWeight: 700, cursor: (!fn || (!isEdit && !file) || submitting) ? "not-allowed" : "pointer",
             fontFamily: FN, transition: "opacity 0.15s",
           }}
         >
-          {submitting ? "생성 중..." : "프로젝트 생성"}
+          {submitting ? (isEdit ? "저장 중..." : "생성 중...") : (isEdit ? "저장" : "프로젝트 생성")}
         </button>
       </div>
     </div>

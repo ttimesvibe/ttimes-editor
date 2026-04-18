@@ -133,26 +133,36 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
     });
   }, []);
   const [showNewProject, setShowNewProject] = useState(false);
+  const [editProjectData, setEditProjectData] = useState(null); // null = create mode, object = edit mode
   const [showShootModal, setShowShootModal] = useState(false);
   const [editShootData, setEditShootData] = useState(null); // null = create mode, object = edit mode
   const [viewMode, setViewMode] = useState("board"); // "board" | "kanban"
   const [parentShootIdForNewProject, setParentShootIdForNewProject] = useState(null);
   const [kanbanRefreshKey, setKanbanRefreshKey] = useState(0);
+  const [projectRefreshKey, setProjectRefreshKey] = useState(0);
 
   const handleNewProjectCreate = useCallback(async (id, fileContent, fileName) => {
+    const wasEdit = !!editProjectData;
     setShowNewProject(false);
+    setEditProjectData(null);
     setParentShootIdForNewProject(null);
     setKanbanRefreshKey(k => k + 1);
-    // 원고 텍스트를 manuscript 탭에 저장
-    if (fileContent) {
+    setProjectRefreshKey(k => k + 1);
+    // 원고 텍스트를 manuscript 탭에 저장 (생성 시에만)
+    if (fileContent && !wasEdit) {
       try {
         await apiSaveTab(id, "manuscript", { text: fileContent, fileName }, cfg, fileName);
       } catch (e) {
         console.error("원고 저장 실패:", e);
       }
+      onSelectProject(id);
     }
-    onSelectProject(id);
-  }, [onSelectProject, cfg]);
+  }, [onSelectProject, cfg, editProjectData]);
+
+  const handleEditProject = useCallback((proj) => {
+    setEditProjectData(proj);
+    setShowNewProject(true);
+  }, []);
 
   const handleShootCreated = useCallback(() => {
     setShowShootModal(false);
@@ -172,16 +182,19 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
 
   return <>
     <Dashboard authUser={authUser} cfg={cfg} onSelectProject={onSelectProject}
-      onNewProject={() => { setParentShootIdForNewProject(null); setShowNewProject(true); }}
+      onNewProject={() => { setEditProjectData(null); setParentShootIdForNewProject(null); setShowNewProject(true); }}
+      onEditProject={handleEditProject}
       onNewShoot={() => { setEditShootData(null); setShowShootModal(true); }}
       onEditShoot={handleEditShoot}
       onNewProjectWithShoot={handleNewProjectWithShoot}
       onLogout={onLogout}
       toggleTheme={toggleTheme} theme={theme}
-      viewMode={viewMode} setViewMode={setViewMode} kanbanRefreshKey={kanbanRefreshKey} />
+      viewMode={viewMode} setViewMode={setViewMode}
+      kanbanRefreshKey={kanbanRefreshKey} projectRefreshKey={projectRefreshKey} />
     {showNewProject && <NewProjectModal authUser={authUser} cfg={cfg}
       parentShootId={parentShootIdForNewProject}
-      onClose={() => { setShowNewProject(false); setParentShootIdForNewProject(null); }}
+      project={editProjectData}
+      onClose={() => { setShowNewProject(false); setEditProjectData(null); setParentShootIdForNewProject(null); }}
       onCreate={handleNewProjectCreate} />}
     {showShootModal && <ShootModal authUser={authUser} cfg={cfg}
       shoot={editShootData}

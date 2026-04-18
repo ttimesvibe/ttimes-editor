@@ -4,7 +4,31 @@
 // /correct: v4 통합 교정 (필러+용어+맞춤법+구어체 단일 호출 + 코드 검증)
 // /highlights: v2 룰북 기반 2-Pass (Draft Agent → Editor Agent) + 청크 분할 지원
 
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxUH1FPI7OxF4_N1N8F6ExCNkyBTAZY3jmPjDch1W4Lqv96WbbxBzSky-Bkk5qF9MBW/exec";
+// 이메일 전용 (ttimesvibe 계정)
+const APPS_SCRIPT_EMAIL_URL = "https://script.google.com/macros/s/AKfycbxUH1FPI7OxF4_N1N8F6ExCNkyBTAZY3jmPjDch1W4Lqv96WbbxBzSky-Bkk5qF9MBW/exec";
+// 캘린더 전용 (ttimes6000 계정)
+const APPS_SCRIPT_CALENDAR_URL = "https://script.google.com/macros/s/AKfycbxrH2fv0WMEAfBgBwXQs-ygTq9XamQqBSs36Pz6DiqYnx1wrPyfODxm5QlFwgganB7D1w/exec";
+
+// Google Apps Script 웹 앱 호출
+// 302 다중 리다이렉트를 POST로 유지하면서 따라감
+async function callAppsScript(targetUrl, payload) {
+  const body = JSON.stringify(payload);
+  let url = targetUrl;
+  for (let i = 0; i < 5; i++) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body,
+      redirect: "manual",
+    });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("Location");
+      if (loc) { url = loc; continue; }
+    }
+    return res;
+  }
+  throw new Error("Too many redirects calling Apps Script");
+}
 
 const ALLOWED_ORIGINS = [
   "https://ttimesvibe.github.io",
@@ -512,6 +536,7 @@ async function handleProjectUpdate(body, env, headers) {
   if (body.memo !== undefined) index[idx].memo = body.memo;
   if (body.fn !== undefined) index[idx].fn = body.fn;
   if (body.stage !== undefined) index[idx].stage = body.stage;
+  if (body.parentShootId !== undefined) index[idx].parentShootId = body.parentShootId;
   index[idx].updatedAt = new Date().toISOString();
 
   await env.SESSIONS.put(PROJECT_INDEX_KEY, JSON.stringify(index));
@@ -657,33 +682,112 @@ async function handleShootCreate(body, user, env, headers) {
   await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(index));
 
   // Google Calendar 이벤트 생성 (비동기, 실패해도 촬영 등록은 유지)
+  console.log("[shoot create] shootDate:", shoot.shootDate);
   if (shoot.shootDate) {
     try {
+      console.log("[shoot create] calling Apps Script...");
       const startTime = new Date(shoot.shootDate);
       const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);
+      // 캘린더 초대 이메일 매핑 (CMS 이메일 → 개인 캘린더)
+      const CALENDAR_EMAIL_MAP = {
+        "hjae@mt.co.kr": "repfootball@gmail.com",
+      };
+      // 캘린더 초대: 촬영 + 진행 담당만 (원고/영상 편집은 이메일만)
       const attendees = [
         ...(shoot.roles?.filming || []),
         ...(shoot.roles?.progress || []),
-        ...(shoot.roles?.scriptEdit || []),
-        ...(shoot.roles?.videoEdit || []),
-      ].map(m => m.email).filter(Boolean);
+      ].map(m => CALENDAR_EMAIL_MAP[m.email] || m.email).filter(Boolean);
       const episodeText = shoot.totalEpisodes ? ` (${shoot.totalEpisodes}편)` : "";
 
-      await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const calRes = await callAppsScript(APPS_SCRIPT_CALENDAR_URL, {
           action: "createEvent",
           title: `[촬영] ${shoot.guest}${episodeText}`,
           description: `주제: ${shoot.topic || "미정"}\n메모: ${shoot.memo || ""}\n등록자: ${shoot.creator}`,
           startTime: startTime.toISOString(),
           endTime: endTime.toISOString(),
           attendees,
-        }),
       });
+      console.log("[shoot create] Apps Script status:", calRes.status);
+      const calText = await calRes.clone().text();
+      console.log("[shoot create] Apps Script response (first 200):", calText.slice(0, 200));
+      // calendarEventId 저장
+      try {
+        const calData = await calRes.json();
+        if (calData?.eventId) {
+          shoot.calendarEventId = calData.eventId;
+          // index에도 반영
+          index[0].calendarEventId = calData.eventId;
+          await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(index));
+        }
+      } catch {}
     } catch (calErr) {
       console.error("Calendar event creation failed:", calErr);
     }
+  }
+
+  // 이메일 알림 발송 (배정된 팀원에게)
+  try {
+    const allMembers = [
+      ...(shoot.roles?.filming || []),
+      ...(shoot.roles?.progress || []),
+      ...(shoot.roles?.scriptEdit || []),
+      ...(shoot.roles?.videoEdit || []),
+    ];
+    const emailRecipients = allMembers.map(m => m.email).filter(Boolean);
+
+    if (emailRecipients.length > 0) {
+      const ROLE_NAMES = { filming: "촬영", progress: "진행", scriptEdit: "원고 편집", videoEdit: "영상 편집" };
+      const dateObj = shoot.shootDate ? new Date(shoot.shootDate) : null;
+      const dayNames = ["일","월","화","수","목","금","토"];
+      const dateStr = dateObj
+        ? `${dateObj.getFullYear()}년 ${dateObj.getMonth()+1}월 ${dateObj.getDate()}일 (${dayNames[dateObj.getDay()]}) ${dateObj.getHours()}시${dateObj.getMinutes() ? dateObj.getMinutes()+"분" : ""}`
+        : "미정";
+      const episodeText = shoot.totalEpisodes ? `${shoot.totalEpisodes}편` : "미정";
+
+      // 역할별 팀원 목록 HTML
+      const roleRows = ["filming","progress","scriptEdit","videoEdit"].map(rk => {
+        const members = shoot.roles?.[rk] || [];
+        if (members.length === 0) return "";
+        return `<tr><td style="padding:8px 12px;font-weight:bold;color:#666;border-bottom:1px solid #eee;">${ROLE_NAMES[rk]}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${members.map(m=>m.name).join(", ")}</td></tr>`;
+      }).filter(Boolean).join("");
+
+      // 태그 표시
+      const tagList = [];
+      if (shoot.tags?.studioA) tagList.push("A스튜디오 예약");
+      if (shoot.tags?.studioB) tagList.push("B스튜디오 예약");
+      if (shoot.tags?.studioBooked) tagList.push("스튜디오 예약");
+      if (shoot.tags?.hasDemo) tagList.push("시연있음");
+      const tagStr = tagList.length > 0 ? tagList.join(", ") : "";
+
+      const htmlBody = `
+<div style="font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;max-width:560px;margin:0 auto;">
+  <div style="background:#1a1d29;padding:24px 28px;border-radius:8px 8px 0 0;">
+    <h2 style="margin:0;color:#fff;font-size:18px;">촬영 일정 등록</h2>
+  </div>
+  <div style="background:#fff;padding:24px 28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+    <h3 style="margin:0 0 4px;font-size:20px;color:#111;">${shoot.guest}</h3>
+    ${shoot.topic ? `<p style="margin:0 0 16px;color:#666;font-size:14px;">${shoot.topic}</p>` : '<div style="margin-bottom:16px;"></div>'}
+
+    <table style="width:100%;border-collapse:collapse;font-size:14px;color:#333;margin-bottom:16px;">
+      <tr><td style="padding:8px 12px;font-weight:bold;color:#666;border-bottom:1px solid #eee;">촬영 날짜</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${dateStr}</td></tr>
+      ${tagStr ? `<tr><td style="padding:8px 12px;font-weight:bold;color:#666;border-bottom:1px solid #eee;">태그</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${tagStr}</td></tr>` : ""}
+      ${roleRows}
+    </table>
+
+    <p style="margin:16px 0 0;font-size:12px;color:#999;">등록자: ${shoot.creator} · 티타임즈 편집 CMS</p>
+  </div>
+</div>`;
+
+      await callAppsScript(APPS_SCRIPT_EMAIL_URL, {
+          action: "sendEmail",
+          to: emailRecipients,
+          subject: `[티타임즈] 촬영 일정: ${shoot.guest} (${dateStr})`,
+          body: `촬영 일정이 등록되었습니다.\n\n게스트: ${shoot.guest}\n주제: ${shoot.topic || "미정"}\n날짜: ${dateStr}\n등록자: ${shoot.creator}`,
+          htmlBody,
+      });
+    }
+  } catch (emailErr) {
+    console.error("Email notification failed:", emailErr);
   }
 
   return new Response(JSON.stringify({ success: true, id, shoot }), { headers });
@@ -699,6 +803,9 @@ async function handleShootUpdate(body, env, headers) {
   const idx = index.findIndex(s => s.id === id);
   if (idx < 0) return new Response(JSON.stringify({ error: "shoot not found" }), { status: 404, headers });
 
+  // 이전 roles 스냅샷 (신규 멤버 비교용)
+  const oldRoles = body.roles !== undefined ? JSON.parse(JSON.stringify(index[idx].roles || {})) : null;
+
   if (body.guest !== undefined) index[idx].guest = body.guest;
   if (body.topic !== undefined) index[idx].topic = body.topic;
   if (body.shootDate !== undefined) index[idx].shootDate = body.shootDate;
@@ -710,6 +817,98 @@ async function handleShootUpdate(body, env, headers) {
   index[idx].updatedAt = new Date().toISOString();
 
   await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(index));
+
+  // ── 신규 멤버 감지 + 알림 ──
+  if (oldRoles && body.roles) {
+    const shoot = index[idx];
+    const CALENDAR_EMAIL_MAP = { "hjae@mt.co.kr": "repfootball@gmail.com" };
+    const ROLE_NAMES = { filming: "촬영", progress: "진행", scriptEdit: "원고 편집", videoEdit: "영상 편집" };
+
+    // 이전 이메일 Set
+    const oldEmailSet = new Set();
+    ["filming","progress","scriptEdit","videoEdit"].forEach(rk => {
+      (oldRoles[rk] || []).forEach(m => oldEmailSet.add(m.email));
+    });
+
+    // 신규 멤버 추출
+    const newCalendarMembers = []; // 촬영+진행 신규 → 캘린더 추가
+    const newAllMembers = [];      // 전체 신규 → 이메일
+    ["filming","progress","scriptEdit","videoEdit"].forEach(rk => {
+      (body.roles[rk] || []).forEach(m => {
+        if (!oldEmailSet.has(m.email)) {
+          newAllMembers.push(m);
+          if (rk === "filming" || rk === "progress") newCalendarMembers.push(m);
+        }
+      });
+    });
+
+    // 1) 캘린더 참석자 추가 (촬영/진행 신규만)
+    if (newCalendarMembers.length > 0 && shoot.calendarEventId) {
+      try {
+        const newGuests = newCalendarMembers.map(m => CALENDAR_EMAIL_MAP[m.email] || m.email).filter(Boolean);
+        await callAppsScript(APPS_SCRIPT_CALENDAR_URL, {
+            action: "addGuests",
+            eventId: shoot.calendarEventId,
+            guests: newGuests,
+        });
+      } catch (err) {
+        console.error("addGuests failed:", err);
+      }
+    }
+
+    // 2) 이메일 알림 (전체 신규만)
+    if (newAllMembers.length > 0) {
+      try {
+        const dateObj = shoot.shootDate ? new Date(shoot.shootDate) : null;
+        const dayNames = ["일","월","화","수","목","금","토"];
+        const dateStr = dateObj
+          ? `${dateObj.getFullYear()}년 ${dateObj.getMonth()+1}월 ${dateObj.getDate()}일 (${dayNames[dateObj.getDay()]}) ${dateObj.getHours()}시${dateObj.getMinutes() ? dateObj.getMinutes()+"분" : ""}`
+          : "미정";
+        const episodeText = shoot.totalEpisodes ? `${shoot.totalEpisodes}편` : "미정";
+
+        const roleRows = ["filming","progress","scriptEdit","videoEdit"].map(rk => {
+          const members = shoot.roles?.[rk] || [];
+          if (members.length === 0) return "";
+          return `<tr><td style="padding:8px 12px;font-weight:bold;color:#666;border-bottom:1px solid #eee;">${ROLE_NAMES[rk]}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${members.map(m=>m.name).join(", ")}</td></tr>`;
+        }).filter(Boolean).join("");
+
+        const tagList = [];
+        if (shoot.tags?.studioA) tagList.push("A스튜디오 예약");
+        if (shoot.tags?.studioB) tagList.push("B스튜디오 예약");
+        if (shoot.tags?.studioBooked) tagList.push("스튜디오 예약");
+        if (shoot.tags?.hasDemo) tagList.push("시연있음");
+        const tagStr = tagList.length > 0 ? tagList.join(", ") : "";
+
+        const htmlBody = `
+<div style="font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;max-width:560px;margin:0 auto;">
+  <div style="background:#1a1d29;padding:24px 28px;border-radius:8px 8px 0 0;">
+    <h2 style="margin:0;color:#fff;font-size:18px;">촬영 일정 배정 알림</h2>
+  </div>
+  <div style="background:#fff;padding:24px 28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+    <h3 style="margin:0 0 4px;font-size:20px;color:#111;">${shoot.guest}</h3>
+    ${shoot.topic ? `<p style="margin:0 0 16px;color:#666;font-size:14px;">${shoot.topic}</p>` : '<div style="margin-bottom:16px;"></div>'}
+    <table style="width:100%;border-collapse:collapse;font-size:14px;color:#333;margin-bottom:16px;">
+      <tr><td style="padding:8px 12px;font-weight:bold;color:#666;border-bottom:1px solid #eee;">촬영 날짜</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${dateStr}</td></tr>
+      ${tagStr ? `<tr><td style="padding:8px 12px;font-weight:bold;color:#666;border-bottom:1px solid #eee;">태그</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${tagStr}</td></tr>` : ""}
+      ${roleRows}
+    </table>
+    <p style="margin:16px 0 0;font-size:12px;color:#999;">티타임즈 편집 CMS</p>
+  </div>
+</div>`;
+
+        await callAppsScript(APPS_SCRIPT_EMAIL_URL, {
+            action: "sendEmail",
+            to: newAllMembers.map(m => m.email),
+            subject: `[티타임즈] 촬영 일정 배정: ${shoot.guest} (${dateStr})`,
+            body: `촬영 일정에 배정되었습니다.\n\n게스트: ${shoot.guest}\n주제: ${shoot.topic || "미정"}\n날짜: ${dateStr}`,
+            htmlBody,
+        });
+      } catch (err) {
+        console.error("Update email failed:", err);
+      }
+    }
+  }
+
   return new Response(JSON.stringify({ success: true }), { headers });
 }
 
