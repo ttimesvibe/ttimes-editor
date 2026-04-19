@@ -554,6 +554,7 @@ async function handleProjectUpdate(body, env, headers) {
   if (idx < 0) return new Response(JSON.stringify({ error: "project not found" }), { status: 404, headers });
 
   const oldParentShootId = index[idx].parentShootId || null;
+  const oldStage = index[idx].stage || null;
 
   if (body.status !== undefined) index[idx].status = body.status;
   if (body.editors !== undefined) index[idx].editors = body.editors;
@@ -561,6 +562,23 @@ async function handleProjectUpdate(body, env, headers) {
   if (body.fn !== undefined) index[idx].fn = body.fn;
   if (body.stage !== undefined) index[idx].stage = body.stage;
   if (body.parentShootId !== undefined) index[idx].parentShootId = body.parentShootId || null;
+
+  // stage가 "done"으로 변경 → 게시판 완료 버튼과 동일 효과 (currentStep/status 동기화)
+  if (body.stage !== undefined && body.stage !== oldStage) {
+    if (body.stage === "done") {
+      index[idx].currentStep = "done";
+      index[idx].status = "done";
+      // stepProgress 전 단계 체크 처리 (선택)
+      if (Array.isArray(index[idx].stepProgress)) {
+        index[idx].stepProgress = index[idx].stepProgress.map(() => true);
+      }
+    } else if (oldStage === "done") {
+      // done → 다른 stage로 복원
+      if (index[idx].currentStep === "done") index[idx].currentStep = "review";
+      if (index[idx].status === "done") index[idx].status = "active";
+    }
+  }
+
   index[idx].updatedAt = new Date().toISOString();
 
   await env.SESSIONS.put(PROJECT_INDEX_KEY, JSON.stringify(index));
@@ -666,8 +684,15 @@ async function handleProjectUpdateStep(body, env, headers) {
   }
   if (step) {
     index[idx].currentStep = step;
-    if (step === "done") index[idx].status = "done";
-    else if (index[idx].status === "done") index[idx].status = "active";
+    if (step === "done") {
+      index[idx].status = "done";
+      // 게시판 완료 → 칸반도 표출 완료로 동기화
+      index[idx].stage = "done";
+    } else if (index[idx].status === "done") {
+      index[idx].status = "active";
+      // 복원 시 stage도 editing으로 되돌림 (기본값)
+      if (index[idx].stage === "done") index[idx].stage = "editing";
+    }
   }
   index[idx].updatedAt = new Date().toISOString();
 
