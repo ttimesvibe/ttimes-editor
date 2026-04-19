@@ -547,7 +547,7 @@ function ShootCard({ shoot, stage, onClick, onMoveStage, onDragStart, onDragEnd,
 
       {/* Bottom: date + avatars */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 11, color: "#5E6380" }}>{formatShootDate(shoot.shootDate)}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "#B8BDD1" }}>{formatShootDate(shoot.shootDate)}</span>
         <div style={{ display: "flex" }}>
           {allRoles.slice(0, 4).map((r, i) => (
             <span key={r.email || i} style={{
