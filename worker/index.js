@@ -9,6 +9,22 @@ const APPS_SCRIPT_EMAIL_URL = "https://script.google.com/macros/s/AKfycbxUH1FPI7
 // 캘린더 전용 (ttimes6000 계정)
 const APPS_SCRIPT_CALENDAR_URL = "https://script.google.com/macros/s/AKfycbxrH2fv0WMEAfBgBwXQs-ygTq9XamQqBSs36Pz6DiqYnx1wrPyfODxm5QlFwgganB7D1w/exec";
 
+// KST(+09:00) 기준 날짜 포맷팅 — Worker가 UTC에서 실행되므로 직접 계산
+function formatKSTDate(isoString) {
+  if (!isoString) return "미정";
+  const dayNames = ["일","월","화","수","목","금","토"];
+  // UTC 밀리초에 +9시간 더해서 KST 컴포넌트 추출
+  const d = new Date(isoString);
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  const y = kst.getUTCFullYear();
+  const mo = kst.getUTCMonth() + 1;
+  const da = kst.getUTCDate();
+  const dayName = dayNames[kst.getUTCDay()];
+  const h = kst.getUTCHours();
+  const mi = kst.getUTCMinutes();
+  return `${y}년 ${mo}월 ${da}일 (${dayName}) ${h}시${mi ? mi + "분" : ""}`;
+}
+
 // Google Apps Script 웹 앱 호출
 // 302 다중 리다이렉트를 POST로 유지하면서 따라감
 async function callAppsScript(targetUrl, payload) {
@@ -593,11 +609,30 @@ async function handleProjectDelete(body, env, headers) {
   const { id } = body;
   if (!id) return new Response(JSON.stringify({ error: "id required" }), { status: 400, headers });
 
-  // project_index에서 제거
+  // 삭제 전 parentShootId 확인
   const raw = await env.SESSIONS.get(PROJECT_INDEX_KEY);
   const index = raw ? JSON.parse(raw) : [];
+  const target = index.find(p => p.id === id);
+  const parentShootId = target?.parentShootId || null;
+
+  // project_index에서 제거
   const filtered = index.filter(p => p.id !== id);
   await env.SESSIONS.put(PROJECT_INDEX_KEY, JSON.stringify(filtered));
+
+  // 부모 shoot의 childProjectIds에서도 제거
+  if (parentShootId) {
+    const shootRaw = await env.SESSIONS.get(SHOOT_INDEX_KEY);
+    const shoots = shootRaw ? JSON.parse(shootRaw) : [];
+    const parentShoot = shoots.find(s => s.id === parentShootId);
+    if (parentShoot?.childProjectIds?.length) {
+      const before = parentShoot.childProjectIds.length;
+      parentShoot.childProjectIds = parentShoot.childProjectIds.filter(pid => pid !== id);
+      if (parentShoot.childProjectIds.length !== before) {
+        parentShoot.updatedAt = new Date().toISOString();
+        await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(shoots));
+      }
+    }
+  }
 
   // 관련 KV key 삭제
   const tabs = ["meta","manuscript","correction","subtitle","review","highlight","guide","setgen","metadata","visual","modify"];
@@ -776,11 +811,7 @@ async function handleShootCreate(body, user, env, headers) {
 
     if (emailRecipients.length > 0) {
       const ROLE_NAMES = { filming: "촬영", progress: "진행", scriptEdit: "원고 편집", videoEdit: "영상 편집" };
-      const dateObj = shoot.shootDate ? new Date(shoot.shootDate) : null;
-      const dayNames = ["일","월","화","수","목","금","토"];
-      const dateStr = dateObj
-        ? `${dateObj.getFullYear()}년 ${dateObj.getMonth()+1}월 ${dateObj.getDate()}일 (${dayNames[dateObj.getDay()]}) ${dateObj.getHours()}시${dateObj.getMinutes() ? dateObj.getMinutes()+"분" : ""}`
-        : "미정";
+      const dateStr = formatKSTDate(shoot.shootDate);
       const episodeText = shoot.totalEpisodes ? `${shoot.totalEpisodes}편` : "미정";
 
       // 역할별 팀원 목록 HTML
@@ -898,11 +929,7 @@ async function handleShootUpdate(body, env, headers) {
     // 2) 이메일 알림 (전체 신규만)
     if (newAllMembers.length > 0) {
       try {
-        const dateObj = shoot.shootDate ? new Date(shoot.shootDate) : null;
-        const dayNames = ["일","월","화","수","목","금","토"];
-        const dateStr = dateObj
-          ? `${dateObj.getFullYear()}년 ${dateObj.getMonth()+1}월 ${dateObj.getDate()}일 (${dayNames[dateObj.getDay()]}) ${dateObj.getHours()}시${dateObj.getMinutes() ? dateObj.getMinutes()+"분" : ""}`
-          : "미정";
+        const dateStr = formatKSTDate(shoot.shootDate);
         const episodeText = shoot.totalEpisodes ? `${shoot.totalEpisodes}편` : "미정";
 
         const roleRows = ["filming","progress","scriptEdit","videoEdit"].map(rk => {

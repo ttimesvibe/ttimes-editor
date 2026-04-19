@@ -185,10 +185,25 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
 
     if (type === "shoot") {
       const shoot = (Array.isArray(shoots) ? shoots : []).find(s => s.id === id);
-      if (shoot && shoot.stage !== colKey) moveShootStage(id, colKey);
+      if (!shoot || shoot.stage === colKey) return;
+
+      // TransitionCard(자식 프로젝트 연결된 shoot)를 done으로 드래그 금지
+      // → 자식 프로젝트가 invisible해지는 버그 방지
+      if (colKey === "done" && shoot.childProjectIds?.length > 0) {
+        alert("연결된 원고 프로젝트가 있어 직접 '표출 완료'로 이동할 수 없습니다.\n자식 프로젝트를 먼저 완료하거나 연결을 해제해 주세요.");
+        return;
+      }
+      moveShootStage(id, colKey);
     } else if (type === "project") {
       const proj = projects.find(p => p.id === id);
-      if (proj && proj.stage !== colKey) moveProjectStage(id, colKey);
+      if (!proj || proj.stage === colKey) return;
+
+      // 프로젝트는 pre-production 컬럼으로 이동 불가 (렌더 안 되므로 실종됨)
+      if (colKey === "pre-production") {
+        alert("원고 프로젝트는 '촬영 예정' 컬럼으로 이동할 수 없습니다.");
+        return;
+      }
+      moveProjectStage(id, colKey);
     }
   };
 
@@ -233,9 +248,11 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
     if (grouped[s.stage]) grouped[s.stage].push({ type: "shoot", data: s });
   });
 
+  // childIdSet: 현재 노출되는 shoot의 자식만 포함
+  // (mineOnly로 parent shoot이 필터되는 경우, 자식도 독립 프로젝트로 editing 컬럼에 보이도록)
   const childIdSet = new Set();
   sortedShoots.forEach(s => {
-    if (s.stage === "editing" && s.childProjectIds?.length) {
+    if (s.stage === "editing" && s.childProjectIds?.length && isMyShoot(s)) {
       s.childProjectIds.forEach(id => childIdSet.add(id));
     }
   });
