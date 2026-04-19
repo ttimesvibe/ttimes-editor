@@ -612,8 +612,8 @@ function TransitionCard({ shoot, children, onSelectProject, onNewProject, onDrag
         <span style={{ fontSize: 13, fontWeight: 700, color: "#A78BFA" }}>
           {shoot.guest} ({shortShootDate(shoot.shootDate)} 촬영)
         </span>
-        <span style={{ fontSize: 10, color: "#5E6380" }}>
-          {children.length > 0 ? `${children.length}편` : "편 미정"}
+        <span style={{ fontSize: 11, fontWeight: 700, color: shoot.totalEpisodes ? "#EF4444" : "#5E6380" }}>
+          {shoot.totalEpisodes ? `총 ${shoot.totalEpisodes}편` : "편 미정"}
         </span>
       </div>
 

@@ -531,15 +531,54 @@ async function handleProjectUpdate(body, env, headers) {
   const idx = index.findIndex(p => p.id === id);
   if (idx < 0) return new Response(JSON.stringify({ error: "project not found" }), { status: 404, headers });
 
+  const oldParentShootId = index[idx].parentShootId || null;
+
   if (body.status !== undefined) index[idx].status = body.status;
   if (body.editors !== undefined) index[idx].editors = body.editors;
   if (body.memo !== undefined) index[idx].memo = body.memo;
   if (body.fn !== undefined) index[idx].fn = body.fn;
   if (body.stage !== undefined) index[idx].stage = body.stage;
-  if (body.parentShootId !== undefined) index[idx].parentShootId = body.parentShootId;
+  if (body.parentShootId !== undefined) index[idx].parentShootId = body.parentShootId || null;
   index[idx].updatedAt = new Date().toISOString();
 
   await env.SESSIONS.put(PROJECT_INDEX_KEY, JSON.stringify(index));
+
+  // parentShootId가 변경되면 shoot의 childProjectIds 동기화
+  if (body.parentShootId !== undefined) {
+    const newParentShootId = body.parentShootId || null;
+    if (oldParentShootId !== newParentShootId) {
+      const shootRaw = await env.SESSIONS.get(SHOOT_INDEX_KEY);
+      const shoots = shootRaw ? JSON.parse(shootRaw) : [];
+      let changed = false;
+      // 기존 부모에서 제거
+      if (oldParentShootId) {
+        const oldShoot = shoots.find(s => s.id === oldParentShootId);
+        if (oldShoot?.childProjectIds) {
+          const before = oldShoot.childProjectIds.length;
+          oldShoot.childProjectIds = oldShoot.childProjectIds.filter(pid => pid !== id);
+          if (oldShoot.childProjectIds.length !== before) {
+            oldShoot.updatedAt = new Date().toISOString();
+            changed = true;
+          }
+        }
+      }
+      // 새 부모에 추가
+      if (newParentShootId) {
+        const newShoot = shoots.find(s => s.id === newParentShootId);
+        if (newShoot) {
+          if (!newShoot.childProjectIds) newShoot.childProjectIds = [];
+          if (!newShoot.childProjectIds.includes(id)) {
+            newShoot.childProjectIds.push(id);
+            newShoot.updatedAt = new Date().toISOString();
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        await env.SESSIONS.put(SHOOT_INDEX_KEY, JSON.stringify(shoots));
+      }
+    }
+  }
 
   // stage가 done으로 변경될 때 부모 shoot 자동 완료 체크
   if (body.stage === "done" && index[idx].parentShootId) {
@@ -965,13 +1004,16 @@ async function checkAndAutoCompleteShoot(shootId, env) {
   const projects = projRaw ? JSON.parse(projRaw) : [];
   const children = projects.filter(p => p.parentShootId === shootId);
 
+  // totalEpisodes가 설정되지 않으면 자동 완료하지 않음 (수동 드래그 전용)
+  const te = shoot.totalEpisodes;
+  if (!te) return;
+
   if (children.length === 0) return;
   const allDone = children.every(p => p.status === "done" || p.currentStep === "done");
   if (!allDone) return;
 
-  // totalEpisodes가 설정돼 있으면 자식 수가 일치해야 자동 완료
-  const te = shoot.totalEpisodes;
-  if (te && children.length < te) return;
+  // 자식 수가 totalEpisodes에 도달해야 자동 완료
+  if (children.length < te) return;
 
   shoot.stage = "done";
   shoot.updatedAt = new Date().toISOString();
