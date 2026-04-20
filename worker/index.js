@@ -7,7 +7,7 @@
 // 이메일 전용 (ttimesvibe 계정)
 const APPS_SCRIPT_EMAIL_URL = "https://script.google.com/macros/s/AKfycbxUH1FPI7OxF4_N1N8F6ExCNkyBTAZY3jmPjDch1W4Lqv96WbbxBzSky-Bkk5qF9MBW/exec";
 // 캘린더 전용 (ttimes6000 계정)
-const APPS_SCRIPT_CALENDAR_URL = "https://script.google.com/macros/s/AKfycbxrH2fv0WMEAfBgBwXQs-ygTq9XamQqBSs36Pz6DiqYnx1wrPyfODxm5QlFwgganB7D1w/exec";
+const APPS_SCRIPT_CALENDAR_URL = "https://script.google.com/macros/s/AKfycby-6zZRA4NKKIQYm3ZGDSQK6mWnXsW06BZoYeayLg8h4GrdW5H-9i63WqG-leApPzomQg/exec";
 
 // 캘린더 초대 이메일 매핑 (CMS 이메일 → 개인 캘린더)
 // 필요 시 여기에 추가만 하면 됨
@@ -33,24 +33,15 @@ function formatKSTDate(isoString) {
 }
 
 // Google Apps Script 웹 앱 호출
-// 302 다중 리다이렉트를 POST로 유지하면서 따라감
+// Apps Script는 POST /exec → 302 Redirect → googleusercontent.com(GET) 패턴이므로
+// redirect: "follow"로 두어 fetch가 표준 HTTP 302(POST→GET 변환)로 자동 처리하게 함
 async function callAppsScript(targetUrl, payload) {
-  const body = JSON.stringify(payload);
-  let url = targetUrl;
-  for (let i = 0; i < 5; i++) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body,
-      redirect: "manual",
-    });
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get("Location");
-      if (loc) { url = loc; continue; }
-    }
-    return res;
-  }
-  throw new Error("Too many redirects calling Apps Script");
+  return await fetch(targetUrl, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload),
+    redirect: "follow",
+  });
 }
 
 const ALLOWED_ORIGINS = [
@@ -929,11 +920,13 @@ async function handleShootUpdate(body, env, headers) {
 
   // ── 캘린더 이벤트 업데이트 (날짜/게스트/주제/편수 변경 시) ──
   const shootForCal = index[idx];
+  console.log("[shoot update] calendarEventId:", shootForCal.calendarEventId || "NONE");
   if (shootForCal.calendarEventId) {
     const dateChanged = body.shootDate !== undefined && body.shootDate !== oldShootDate;
     const guestChanged = body.guest !== undefined && body.guest !== oldGuest;
     const topicChanged = body.topic !== undefined && body.topic !== oldTopic;
     const episodesChanged = body.totalEpisodes !== undefined && body.totalEpisodes !== oldTotalEpisodes;
+    console.log(`[shoot update] changes: date=${dateChanged} guest=${guestChanged} topic=${topicChanged} episodes=${episodesChanged}`);
 
     if (dateChanged || guestChanged || topicChanged || episodesChanged) {
       try {
@@ -950,9 +943,13 @@ async function handleShootUpdate(body, env, headers) {
         if (topicChanged) {
           updateBody.description = `주제: ${shootForCal.topic || "미정"}\n메모: ${shootForCal.memo || ""}\n등록자: ${shootForCal.creator}`;
         }
-        await callAppsScript(APPS_SCRIPT_CALENDAR_URL, updateBody);
+        console.log("[shoot update] calling Apps Script updateEvent...", JSON.stringify(updateBody));
+        const updateRes = await callAppsScript(APPS_SCRIPT_CALENDAR_URL, updateBody);
+        console.log("[shoot update] Apps Script status:", updateRes.status);
+        const updateText = await updateRes.text();
+        console.log("[shoot update] Apps Script response:", updateText.slice(0, 200));
       } catch (err) {
-        console.error("updateEvent failed:", err);
+        console.error("updateEvent failed:", err.message);
       }
     }
   }
