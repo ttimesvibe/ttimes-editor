@@ -13,6 +13,7 @@ const APPS_SCRIPT_CALENDAR_URL = "https://script.google.com/macros/s/AKfycbxrH2f
 // 필요 시 여기에 추가만 하면 됨
 const CALENDAR_EMAIL_MAP = {
   "hjae@mt.co.kr": "repfootball@gmail.com",
+  "24min@mt.co.kr": "sammylee9393@gmail.com", // 이사민
 };
 
 // KST(+09:00) 기준 날짜 포맷팅 — Worker가 UTC에서 실행되므로 직접 계산
