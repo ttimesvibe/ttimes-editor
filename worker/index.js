@@ -954,6 +954,63 @@ async function handleShootUpdate(body, env, headers) {
     }
   }
 
+  // ── 날짜/시간 변경 시 전체 배정원에게 이메일 알림 ──
+  // (guest/topic/episode 변경은 이메일 알림 제외, 오직 날짜/시간만)
+  const dateChangedForEmail = body.shootDate !== undefined && body.shootDate !== oldShootDate;
+  if (dateChangedForEmail && shootForCal.shootDate) {
+    try {
+      const allMembersForEmail = [
+        ...(shootForCal.roles?.filming || []),
+        ...(shootForCal.roles?.progress || []),
+        ...(shootForCal.roles?.scriptEdit || []),
+        ...(shootForCal.roles?.videoEdit || []),
+      ];
+      const emailRecipients = allMembersForEmail.map(m => m.email).filter(Boolean);
+
+      if (emailRecipients.length > 0) {
+        const ROLE_NAMES_DATE = { filming: "촬영", progress: "진행", scriptEdit: "원고 편집", videoEdit: "영상 편집" };
+        const oldDateStr = oldShootDate ? formatKSTDate(oldShootDate) : "미정";
+        const newDateStr = formatKSTDate(shootForCal.shootDate);
+        const episodeText = shootForCal.totalEpisodes ? `${shootForCal.totalEpisodes}편` : "미정";
+
+        const roleRowsDate = ["filming","progress","scriptEdit","videoEdit"].map(rk => {
+          const members = shootForCal.roles?.[rk] || [];
+          if (members.length === 0) return "";
+          return `<tr><td style="padding:8px 12px;font-weight:bold;color:#666;border-bottom:1px solid #eee;">${ROLE_NAMES_DATE[rk]}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${members.map(m=>m.name).join(", ")}</td></tr>`;
+        }).filter(Boolean).join("");
+
+        const htmlBodyDate = `
+<div style="font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;max-width:560px;margin:0 auto;">
+  <div style="background:#d97706;padding:24px 28px;border-radius:8px 8px 0 0;">
+    <h2 style="margin:0;color:#fff;font-size:18px;">촬영 일정 변경 알림</h2>
+  </div>
+  <div style="background:#fff;padding:24px 28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+    <h3 style="margin:0 0 4px;font-size:20px;color:#111;">${shootForCal.guest}</h3>
+    ${shootForCal.topic ? `<p style="margin:0 0 16px;color:#666;font-size:14px;">${shootForCal.topic}</p>` : '<div style="margin-bottom:16px;"></div>'}
+    <table style="width:100%;border-collapse:collapse;font-size:14px;color:#333;margin-bottom:16px;">
+      <tr><td style="padding:8px 12px;font-weight:bold;color:#666;border-bottom:1px solid #eee;width:90px;">이전 일정</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-decoration:line-through;color:#999;">${oldDateStr}</td></tr>
+      <tr><td style="padding:8px 12px;font-weight:bold;color:#d97706;border-bottom:1px solid #eee;">변경 일정</td><td style="padding:8px 12px;border-bottom:1px solid #eee;font-weight:bold;color:#d97706;">${newDateStr}</td></tr>
+      <tr><td style="padding:8px 12px;font-weight:bold;color:#666;border-bottom:1px solid #eee;">편 수</td><td style="padding:8px 12px;border-bottom:1px solid #eee;">${episodeText}</td></tr>
+      ${roleRowsDate}
+    </table>
+    <p style="margin:16px 0 0;font-size:12px;color:#999;">등록자: ${shootForCal.creator || "-"} · 티타임즈 편집 CMS</p>
+  </div>
+</div>`;
+
+        console.log("[shoot update] sending date-change email to:", emailRecipients.join(","));
+        await callAppsScript(APPS_SCRIPT_EMAIL_URL, {
+          action: "sendEmail",
+          to: emailRecipients,
+          subject: `[티타임즈] 촬영 일정 변경: ${shootForCal.guest} (${newDateStr})`,
+          body: `촬영 일정이 변경되었습니다.\n\n게스트: ${shootForCal.guest}\n이전: ${oldDateStr}\n변경: ${newDateStr}\n등록자: ${shootForCal.creator || "-"}`,
+          htmlBody: htmlBodyDate,
+        });
+      }
+    } catch (err) {
+      console.error("date-change email failed:", err.message);
+    }
+  }
+
   // ── 멤버 변경 감지 + 알림 ──
   if (oldRoles && body.roles) {
     const shoot = index[idx];
