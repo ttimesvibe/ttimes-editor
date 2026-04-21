@@ -1,6 +1,7 @@
 name = "editor"
 main = "index.js"
 compatibility_date = "2024-01-01"
+account_id = "fb0a10864393158e940b149b3ead37f6"
 
 # ⚠️ [placement] 절대 추가 금지!
 # wrangler deploy 시 대시보드 Region 설정이 덮어씌워짐
