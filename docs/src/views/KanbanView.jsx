@@ -115,6 +115,30 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // ── Shoot 카드 클릭 시 최신 데이터 재호출 (다른 사용자가 변경했을 수 있음) ──
+  const handleShootEditClick = async (shootId) => {
+    if (!cfg?.workerUrl || !onEditShoot) return;
+    try {
+      const res = await fetch(`${cfg.workerUrl}/shoots`, { headers: authHeaders() });
+      const data = await res.json();
+      const list = data?.shoots || data || [];
+      const latest = list.find(s => s.id === shootId);
+      if (latest) {
+        // 로컬 상태도 최신으로 갱신
+        setShoots(list);
+        onEditShoot(latest);
+      } else {
+        alert("이 촬영 일정은 다른 사용자에 의해 삭제되었습니다.");
+        setShoots(list);
+      }
+    } catch (err) {
+      console.error("[Kanban] shoot 최신 데이터 조회 실패:", err);
+      // fallback: 캐시된 데이터로 모달 열기
+      const cached = (Array.isArray(shoots) ? shoots : []).find(s => s.id === shootId);
+      if (cached) onEditShoot(cached);
+    }
+  };
+
   // ── Stage move ──
 
   const moveShootStage = async (shootId, newStage) => {
@@ -377,7 +401,7 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
                       key={item.data.id}
                       shoot={item.data}
                       stage={col.key}
-                      onClick={() => onEditShoot?.(item.data)}
+                      onClick={() => handleShootEditClick(item.data.id)}
                       onMoveStage={moveShootStage}
                       onDragStart={(e) => handleDragStart(e, "shoot", item.data.id)}
                       onDragEnd={handleDragEnd}
@@ -428,7 +452,7 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
                       if (item.type === "shoot") {
                         return (
                           <div key={item.data.id}
-                            onClick={() => onEditShoot?.(item.data)}
+                            onClick={() => handleShootEditClick(item.data.id)}
                             style={{
                               background: C.sf, border: `1px solid ${C.bd}`, padding: 12, marginBottom: 6,
                               opacity: 0.6, cursor: "pointer",
