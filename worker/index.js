@@ -791,11 +791,10 @@ async function handleShootCreate(body, user, env, headers) {
         ...(shoot.roles?.filming || []),
         ...(shoot.roles?.progress || []),
       ].map(m => CALENDAR_EMAIL_MAP[m.email] || m.email).filter(Boolean);
-      const episodeText = shoot.totalEpisodes ? ` (${shoot.totalEpisodes}편)` : "";
 
       const calRes = await callAppsScript(APPS_SCRIPT_CALENDAR_URL, {
           action: "createEvent",
-          title: `[촬영] ${shoot.guest}${episodeText}`,
+          title: `[촬영] ${shoot.guest}`,
           description: `주제: ${shoot.topic || "미정"}\n메모: ${shoot.memo || ""}\n등록자: ${shoot.creator}`,
           startTime: startTime.toISOString(),
           endTime: endTime.toISOString(),
@@ -904,7 +903,6 @@ async function handleShootUpdate(body, env, headers) {
   const oldShootDate = index[idx].shootDate;
   const oldGuest = index[idx].guest;
   const oldTopic = index[idx].topic;
-  const oldTotalEpisodes = index[idx].totalEpisodes;
 
   if (body.guest !== undefined) index[idx].guest = body.guest;
   if (body.topic !== undefined) index[idx].topic = body.topic;
@@ -925,10 +923,9 @@ async function handleShootUpdate(body, env, headers) {
     const dateChanged = body.shootDate !== undefined && body.shootDate !== oldShootDate;
     const guestChanged = body.guest !== undefined && body.guest !== oldGuest;
     const topicChanged = body.topic !== undefined && body.topic !== oldTopic;
-    const episodesChanged = body.totalEpisodes !== undefined && body.totalEpisodes !== oldTotalEpisodes;
-    console.log(`[shoot update] changes: date=${dateChanged} guest=${guestChanged} topic=${topicChanged} episodes=${episodesChanged}`);
+    console.log(`[shoot update] changes: date=${dateChanged} guest=${guestChanged} topic=${topicChanged}`);
 
-    if (dateChanged || guestChanged || topicChanged || episodesChanged) {
+    if (dateChanged || guestChanged || topicChanged) {
       try {
         const updateBody = { action: "updateEvent", eventId: shootForCal.calendarEventId };
         if (dateChanged && shootForCal.shootDate) {
@@ -936,9 +933,8 @@ async function handleShootUpdate(body, env, headers) {
           updateBody.startTime = start.toISOString();
           updateBody.endTime = new Date(start.getTime() + 2 * 60 * 60 * 1000).toISOString();
         }
-        if (guestChanged || episodesChanged) {
-          const episodeText = shootForCal.totalEpisodes ? ` (${shootForCal.totalEpisodes}편)` : "";
-          updateBody.title = `[촬영] ${shootForCal.guest}${episodeText}`;
+        if (guestChanged) {
+          updateBody.title = `[촬영] ${shootForCal.guest}`;
         }
         if (topicChanged) {
           updateBody.description = `주제: ${shootForCal.topic || "미정"}\n메모: ${shootForCal.memo || ""}\n등록자: ${shootForCal.creator}`;
