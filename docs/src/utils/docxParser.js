@@ -87,3 +87,50 @@ export function extractTextFromRun(runXml) {
   }
   return texts.join("");
 }
+
+// paragraphs(track changes 세그먼트)와 reviewBlocks를 받아 블록별 삭제 구간 계산
+// 반환: { blockStrikeRanges, deletedBlockIndices } — 0차 검토 화면 렌더링에 사용
+//   blockStrikeRanges: { [blockIndex]: [{s, e}, ...] }  — 블록 텍스트 내 삭제 문자 구간
+//   deletedBlockIndices: number[] — 80% 이상 삭제된 블록 인덱스
+export function computeBlockStrikes(paragraphs, reviewBlocks, fullText) {
+  // paragraphs → charMap: fullText의 각 문자에 대한 deleted 여부
+  const charMap = [];
+  for (let pi = 0; pi < paragraphs.length; pi++) {
+    for (const seg of paragraphs[pi]) {
+      for (let ci = 0; ci < seg.text.length; ci++) {
+        charMap.push(seg.deleted);
+      }
+    }
+    if (pi < paragraphs.length - 1) charMap.push(false); // 단락 사이 \n
+  }
+
+  const blockStrikeRanges = {};
+  const deletedBlockIndices = new Set();
+  let searchFrom = 0;
+
+  for (const rb of reviewBlocks) {
+    const blockStart = fullText.indexOf(rb.text, searchFrom);
+    if (blockStart === -1) continue;
+    searchFrom = blockStart + rb.text.length;
+
+    const ranges = [];
+    let rangeStart = -1;
+    let deletedCount = 0;
+    for (let ci = 0; ci < rb.text.length; ci++) {
+      const isDel = (blockStart + ci) < charMap.length && charMap[blockStart + ci];
+      if (isDel) {
+        deletedCount++;
+        if (rangeStart === -1) rangeStart = ci;
+      } else {
+        if (rangeStart !== -1) { ranges.push({ s: rangeStart, e: ci }); rangeStart = -1; }
+      }
+    }
+    if (rangeStart !== -1) ranges.push({ s: rangeStart, e: rb.text.length });
+
+    if (ranges.length > 0) blockStrikeRanges[rb.index] = ranges;
+    const textLen = rb.text.replace(/\s/g, "").length;
+    if (textLen > 0 && deletedCount >= textLen * 0.8) deletedBlockIndices.add(rb.index);
+  }
+
+  return { blockStrikeRanges, deletedBlockIndices: [...deletedBlockIndices] };
+}

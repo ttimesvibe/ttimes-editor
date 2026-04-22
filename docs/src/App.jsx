@@ -5,7 +5,7 @@ import * as mammoth from "mammoth";
 import { loadConfig, saveConfig } from "./utils/config.js";
 import { loadDictionary, syncDictionaryFromServer, updateDictionary } from "./utils/dictionary.js";
 import { delay, apiCall, apiSaveSession, apiLoadSession, apiAnalyze, apiCorrect, apiHighlightsDraft, apiHighlightsEdit, apiSaveTab, apiLoadMeta, apiLoadTab, apiProjectUpdateStep } from "./utils/api.js";
-import { parseDocxWithTrackChanges } from "./utils/docxParser.js";
+import { parseDocxWithTrackChanges, computeBlockStrikes } from "./utils/docxParser.js";
 import { calcRegression, tsToSeconds, secondsToDisplay, calcDuration, parseBlocks, splitChunks, chunkToText, chunkCtx } from "./utils/lengthModel.js";
 import { findPositions, getCorrectedText } from "./utils/diffRenderer.js";
 import { _savedTheme, C, FN, applyTheme, MARKER_COLORS, MARKER_COLORS_LIGHT, MARKER_COLORS_DARK, setMarkerColors } from "./utils/styles.js";
@@ -148,10 +148,20 @@ function DashboardWrapper({ authUser, onSelectProject, onLogout }) {
     setParentShootIdForNewProject(null);
     setKanbanRefreshKey(k => k + 1);
     setProjectRefreshKey(k => k + 1);
-    // 원고 텍스트를 manuscript 탭에 저장 (생성 시에만)
+    // 원고를 manuscript 탭에 저장 (생성 시에만)
     if (fileContent && !wasEdit) {
       try {
-        await apiSaveTab(id, "manuscript", { text: fileContent, fileName }, cfg, fileName);
+        // fileContent는 객체({text, fullText, paragraphs, hasTrackChanges}) 또는 레거시 문자열
+        const payload = (typeof fileContent === "string")
+          ? { text: fileContent, fileName }
+          : {
+              text: fileContent.text,
+              fileName,
+              fullText: fileContent.fullText || fileContent.text,
+              paragraphs: fileContent.paragraphs || null,
+              hasTrackChanges: !!fileContent.hasTrackChanges,
+            };
+        await apiSaveTab(id, "manuscript", payload, cfg, fileName);
       } catch (e) {
         console.error("원고 저장 실패:", e);
       }
@@ -318,12 +328,35 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
             if ((!c.blocks || c.blocks.length === 0) && td.manuscript?.text) {
               const msText = td.manuscript.text;
               const msName = td.manuscript.fileName || data.fn || "";
-              const reviewBlocks = parseBlocks(msText);
-              const duration = calcDuration(reviewBlocks);
-              const paragraphs = msText.split('\n').map(line => [{ text: line, deleted: false }]);
+              const savedParagraphs = td.manuscript.paragraphs;
+              const savedHasTrackChanges = !!td.manuscript.hasTrackChanges;
+              const savedFullText = td.manuscript.fullText || msText;
               setFn(msName);
-              setReviewData({ hasTrackChanges: false, deletedBlockIndices: [], blockStrikeRanges: {}, duration, reviewBlocks, cleanTextChars: msText.length, paragraphs, cleanText: msText });
-              setBlocks(reviewBlocks);
+
+              if (savedParagraphs && savedHasTrackChanges) {
+                // ── 변경 추적 데이터로 0차 검토 정상 구성 ──
+                const reviewBlocks = parseBlocks(savedFullText);
+                const { blockStrikeRanges, deletedBlockIndices } = computeBlockStrikes(savedParagraphs, reviewBlocks, savedFullText);
+                const duration = calcDuration(reviewBlocks, new Set(deletedBlockIndices));
+                setReviewData({
+                  hasTrackChanges: true,
+                  deletedBlockIndices,
+                  blockStrikeRanges,
+                  duration,
+                  reviewBlocks,
+                  cleanTextChars: msText.length,
+                  paragraphs: savedParagraphs,
+                  cleanText: msText,
+                });
+                setBlocks(reviewBlocks);
+              } else {
+                // ── 레거시 / track changes 없음 — 기존 동작 ──
+                const reviewBlocks = parseBlocks(msText);
+                const duration = calcDuration(reviewBlocks);
+                const paragraphs = savedParagraphs || msText.split('\n').map(line => [{ text: line, deleted: false }]);
+                setReviewData({ hasTrackChanges: false, deletedBlockIndices: [], blockStrikeRanges: {}, duration, reviewBlocks, cleanTextChars: msText.length, paragraphs, cleanText: msText });
+                setBlocks(reviewBlocks);
+              }
               setTab("review");
             } else {
               setTab(hasHl ? "guide" : c.blocks?.length > 0 ? "correction" : "correction");

@@ -1,19 +1,40 @@
 import { useState, useEffect, useRef } from "react";
 import { C, FN } from "../utils/styles.js";
 import * as mammoth from "mammoth";
+import { parseDocxWithTrackChanges } from "../utils/docxParser.js";
 
 function authHeaders() {
   const token = localStorage.getItem("ttimes_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// docx 파싱 — 변경 추적(삭제선) 정보까지 보존
+// 반환: { text, fullText, paragraphs, hasTrackChanges }
+//   text       : 깨끗한 본문 (삭제 텍스트 제외) — 후속 단계의 입력
+//   fullText   : 삭제 텍스트 포함 원본 (0차 검토 표시용)
+//   paragraphs : 단락별 [{text, deleted}] 세그먼트 배열
+//   hasTrackChanges : 삭제선 존재 여부
 async function readFile(file) {
   if (file.name.endsWith(".docx")) {
     const arrayBuffer = await file.arrayBuffer();
+    // 1차 시도: 변경 추적 파서
+    try {
+      const tc = await parseDocxWithTrackChanges(arrayBuffer.slice(0));
+      return {
+        text: tc.cleanText,
+        fullText: tc.fullText,
+        paragraphs: tc.paragraphs,
+        hasTrackChanges: tc.hasTrackChanges,
+      };
+    } catch (e) {
+      console.warn("[NewProjectModal] track changes 파싱 실패, mammoth fallback:", e.message);
+    }
+    // fallback: mammoth (삭제선 없음)
     const result = await mammoth.extractRawText({ arrayBuffer });
-    return result.value;
+    return { text: result.value, fullText: result.value, paragraphs: null, hasTrackChanges: false };
   }
-  return await file.text();
+  const text = await file.text();
+  return { text, fullText: text, paragraphs: null, hasTrackChanges: false };
 }
 
 export function NewProjectModal({ authUser, cfg, onClose, onCreate, parentShootId: initialParentShootId, project: editProject }) {
