@@ -348,7 +348,8 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
                   paragraphs: savedParagraphs,
                   cleanText: msText,
                 });
-                setBlocks(reviewBlocks);
+                // blocks는 cleanText 기준 — 1차 교정 이후 단계가 삭제 반영된 본문 사용
+                setBlocks(parseBlocks(msText));
               } else {
                 // ── 레거시 / track changes 없음 — 기존 동작 ──
                 const reviewBlocks = parseBlocks(msText);
@@ -785,15 +786,24 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
     }).join("\n");
   }, [blocks, diffs, scriptEdits, blockDeletions, applyDeletions]);
 
+  // scriptEdits(수동 수정) + blockDeletions(추가 삭제선) 반영 — correctedScript와 동일한 규칙
   const correctedBlocks = useMemo(() =>
-    blocks.map(b => ({ id: b.index, speaker: b.speaker, time: b.timestamp,
-      text: getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index)) })),
-    [blocks, diffs]);
+    blocks.map(b => {
+      const se = scriptEdits[b.index];
+      let text = se !== undefined ? se : getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index));
+      text = applyDeletions(text, blockDeletions[b.index]);
+      return { id: b.index, speaker: b.speaker, time: b.timestamp, text };
+    }),
+    [blocks, diffs, scriptEdits, blockDeletions, applyDeletions]);
 
   const correctedBlocksFull = useMemo(() =>
-    blocks.map(b => ({ index: b.index, speaker: b.speaker, timestamp: b.timestamp,
-      text: getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index)) })),
-    [blocks, diffs]);
+    blocks.map(b => {
+      const se = scriptEdits[b.index];
+      let text = se !== undefined ? se : getCorrectedText(b.text, diffs.filter(d => d.blockIndex === b.index));
+      text = applyDeletions(text, blockDeletions[b.index]);
+      return { index: b.index, speaker: b.speaker, timestamp: b.timestamp, text };
+    }),
+    [blocks, diffs, scriptEdits, blockDeletions, applyDeletions]);
 
   // Generate guide — 2-Pass: Draft → Editor (청크 분할 지원)
   const handleGuide = useCallback(async()=>{
@@ -1066,7 +1076,8 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           const duration = calcDuration(reviewBlocks, deletedBlockIndices);
           const cleanTextChars = cleanText.length;
           setReviewData({ hasTrackChanges: true, deletedBlockIndices: [...deletedBlockIndices], blockStrikeRanges, duration, reviewBlocks, cleanTextChars, paragraphs: tcResult.paragraphs, cleanText });
-          setBlocks(reviewBlocks); // 0차에서는 전체 블록(삭제 포함) 표시
+          // blocks는 cleanText 기준 — 0차 review는 reviewData.paragraphs로 독립 렌더
+          setBlocks(parseBlocks(cleanText));
           setTab("review");
           setDiffs([]); setHl([]); setHlStats(null); setGReady(false); setTermReview(false);
           return;
@@ -1773,7 +1784,8 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
               const hasScriptEdit = scriptEdits[idx] !== undefined;
               const correctedText = getCorrectedText(b.text, dm[idx]);
               const displayText = hasScriptEdit ? scriptEdits[idx] : null;
-              const finalText = hasScriptEdit ? scriptEdits[idx] : correctedText;
+              // blockDeletions도 반영 — 1차 교정에서 드래그로 추가한 삭제선까지 일관 적용
+              const finalText = applyDeletions(hasScriptEdit ? scriptEdits[idx] : correctedText, blockDeletions[idx]);
               // 매칭 모드에서 이 블록이 대상인지 확인
               const activeMatchBlock = matchingMode ? matchingMode.blockIdx : null;
               return <div key={idx}>
