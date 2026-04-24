@@ -555,19 +555,20 @@ async function handleProjectUpdate(body, env, headers) {
   if (body.stage !== undefined) index[idx].stage = body.stage;
   if (body.parentShootId !== undefined) index[idx].parentShootId = body.parentShootId || null;
 
-  // stage가 "done"으로 변경 → 게시판 완료 버튼과 동일 효과 (currentStep/status 동기화)
+  // stage 변경 시 status 만 동기화. currentStep / stepProgress 는 작업 상태이므로 보존.
   if (body.stage !== undefined && body.stage !== oldStage) {
     if (body.stage === "done") {
-      index[idx].currentStep = "done";
+      // 칸반 "표출 완료" 드래그 → 게시판 완료와 동기
       index[idx].status = "done";
-      // stepProgress 전 단계 체크 처리 (선택)
-      if (Array.isArray(index[idx].stepProgress)) {
-        index[idx].stepProgress = index[idx].stepProgress.map(() => true);
-      }
+      if (oldStage && oldStage !== "done") index[idx]._preDoneStage = oldStage;
+      // currentStep, stepProgress 는 건드리지 않음 — 작업 상태 보존
     } else if (oldStage === "done") {
-      // done → 다른 stage로 복원
-      if (index[idx].currentStep === "done") index[idx].currentStep = "review";
+      // 표출 완료 → 다른 컬럼 드래그: status 복원. body.stage 는 이미 적용됨.
       if (index[idx].status === "done") index[idx].status = "active";
+      delete index[idx]._preDoneStage;
+      // 기존 데이터 호환: 과거 완료 처리로 currentStep 이 "done" 으로 박혀있으면 review 로 리셋
+      if (index[idx].currentStep === "done") index[idx].currentStep = "review";
+      // 새 데이터에서는 currentStep 을 건드리지 않음 — 작업 단계 유지
     }
   }
 
@@ -675,15 +676,33 @@ async function handleProjectUpdateStep(body, env, headers) {
     index[idx].stepProgress[stepIndex] = true;
   }
   if (step) {
-    index[idx].currentStep = step;
+    // "완료" 와 "작업 단계 전환" 을 구분.
+    // 완료 처리 / 복원은 status·stage 만 토글하고 currentStep / stepProgress 는 보존한다.
+    const wasDone = index[idx].status === "done";
     if (step === "done") {
+      // 완료 처리
       index[idx].status = "done";
-      // 게시판 완료 → 칸반도 표출 완료로 동기화
-      index[idx].stage = "done";
-    } else if (index[idx].status === "done") {
+      if (index[idx].stage !== "done") {
+        // 칸반 "표출 완료" 동기화 + 이전 stage 백업 (복원 시 되돌리기 위함)
+        index[idx]._preDoneStage = index[idx].stage || null;
+        index[idx].stage = "done";
+      }
+      // currentStep, stepProgress 는 건드리지 않음 — 작업 상태 보존
+    } else if (wasDone) {
+      // 복원
       index[idx].status = "active";
-      // 복원 시 stage도 editing으로 되돌림 (기본값)
-      if (index[idx].stage === "done") index[idx].stage = "editing";
+      if (index[idx].stage === "done") {
+        index[idx].stage = index[idx]._preDoneStage || "editing";
+        delete index[idx]._preDoneStage;
+      }
+      // 기존 데이터 호환: 과거 완료 처리로 currentStep 이 "done" 으로 덮인 경우엔 요청한 step 으로 교체
+      if (index[idx].currentStep === "done") {
+        index[idx].currentStep = step;
+      }
+      // 그 외에는 currentStep 을 건드리지 않음 — 완료 처리 때 보존된 원 단계 유지
+    } else {
+      // 일반 단계 전환 (완료·복원이 아닌 경우)
+      index[idx].currentStep = step;
     }
   }
   index[idx].updatedAt = new Date().toISOString();
@@ -1392,6 +1411,26 @@ Provide a quick-reference summary so the editor can grasp the interview content 
 - Focus on proper nouns, IT/AI technical terms, and brand names.
 - **Speaker-name misrecognitions must be included.** Use the canonical names from Section 2 and map all body-text variants.
 
+**★ ABSOLUTE RULE — Proper Noun Preservation (overrides everything else in Section 3):**
+A term_corrections entry for a person name, title holder, organization, or place is
+allowed ONLY when the "correct" form is **phonetically similar** to the "wrong" form
+(same syllable count ±1, majority of syllables share initial consonant or vowel).
+
+**FORBIDDEN — do NOT add these to term_corrections under any circumstance:**
+- Substituting a different person for the one the speaker mentioned
+  (e.g., "베센트 재무장관" → "옐런 재무장관" ❌ — different person, not phonetic)
+- "Correcting" a title/role assignment based on your world knowledge of current holders
+- Replacing any name with what you believe is the "currently correct" holder of that role
+- Any term_corrections where wrong and corrected share <50% of syllables by initial/vowel
+
+Your training data has a knowledge cutoff. The speaker has current information you do not.
+If the speaker says person X holds role Y, preserve X exactly — **even if you believe X no
+longer holds Y**. This applies to: cabinet members, CEOs, political leaders, athletes,
+and any role where the current holder may have changed after your training cutoff.
+
+Allowed example: "베셋" → "베센트" ✅ (phonetic STT fix, same person)
+Forbidden example: "베센트" → "옐런" ❌ (different person, knowledge-based substitution)
+
 ### 4. Domain Terminology List
 - Confirm correct Korean spelling with English in parentheses.
 
@@ -1449,7 +1488,30 @@ async function handleAnalyze(body, env, headers) {
   const result = await callOpenAI(systemPrompt, userMsg, env, { temperature: 0.1, max_tokens: 8000 });
 
   if (result.error) return new Response(JSON.stringify({ error: result.error }), { status: result.status || 500, headers });
-  return new Response(JSON.stringify({ success: true, analysis: result.content, usage: result.usage }), { headers });
+
+  // Guardrail: term_corrections에서 고유명사 할루시네이션 의심 엔트리 제거
+  // (한글↔한글 + 음성학적 비유사 + 딕셔너리 미등록 → 지식 기반 substitution 가능성)
+  const analysis = result.content;
+  if (analysis?.term_corrections?.length > 0) {
+    const hangulRatio = s => {
+      const h = [...(s || "")].filter(c => c.charCodeAt(0) >= 0xAC00 && c.charCodeAt(0) <= 0xD7A3).length;
+      return h / Math.max((s || "").length, 1);
+    };
+    const before = analysis.term_corrections.length;
+    analysis.term_corrections = analysis.term_corrections.filter(tc => {
+      const wrong = tc?.wrong || "", correct = tc?.correct || "";
+      if (!wrong || !correct) return false;
+      const bothHangul = hangulRatio(wrong) >= 0.7 && hangulRatio(correct) >= 0.7;
+      if (!bothHangul) return true; // Latin↔Hangul 변환은 통과
+      if (isPhoneticallySimilar(wrong, correct)) return true; // 음성학적 유사 → 통과
+      console.warn(`[analyze-guardrail] 제거: "${wrong}" → "${correct}" (한글↔한글, 비음성학적 — 할루시네이션 의심)`);
+      return false;
+    });
+    const removed = before - analysis.term_corrections.length;
+    if (removed > 0) console.log(`[analyze-guardrail] term_corrections ${removed}개 제거됨 (총 ${before}개 중)`);
+  }
+
+  return new Response(JSON.stringify({ success: true, analysis, usage: result.usage }), { headers });
 }
 
 // ═══════════════════════════════════════
@@ -1520,6 +1582,40 @@ How to distinguish from a real answer:
 - Speaker name misrecognitions must also be corrected.
 - Words not in the dictionary → use context judgment. If uncertain, keep the original.
 
+### §2a. Proper Noun Absolute Preservation (★ HIGHEST PRIORITY, overrides §2)
+
+For ALL proper nouns (person names, titles, organizations, places, product names),
+the ONLY acceptable reasons to change them are:
+  (1) Exact match in the provided terminology dictionary (§2 mandatory mapping), OR
+  (2) Phonetic STT misrecognition where the corrected form is phonetically similar
+      to the original (e.g., "홍재희"→"홍재의": same syllable count, near-homophone).
+
+**ABSOLUTELY FORBIDDEN:**
+- Changing a name based on your world knowledge of "who currently holds this position."
+- Replacing a mentioned person with a different person you believe is more likely.
+- "Correcting" a title/role assignment based on what you know about current events.
+- Substituting any person name that is NOT phonetically close to the original AND NOT in the dictionary.
+
+Your training data has a knowledge cutoff. The speaker in the interview has current
+information that you do not. If the speaker says person X holds role Y, you MUST
+preserve X exactly as written, **even if you believe X no longer holds Y**.
+This applies to: cabinet members, CEOs, political leaders, sports figures, and any
+other role where the current holder may have changed after your training cutoff.
+
+**Test before emitting any person-name change:**
+  - Is the change in the dictionary? → OK
+  - Are original and corrected phonetically similar (same syllable count ±1,
+    majority of syllables share initial consonant/vowel)? → OK
+  - Otherwise → DO NOT emit the change. Leave the original intact.
+
+Example (FORBIDDEN — world-knowledge substitution):
+  original: "미국 재무장관 베센트" → corrected: "미국 재무장관 옐런"  ❌
+  (different person, not phonetic, not in dictionary → MUST NOT change)
+
+Example (ALLOWED — phonetic STT fix):
+  original: "미국 재무장관 베셋" → corrected: "미국 재무장관 베센트"  ✅
+  (same person, phonetically similar, STT word-boundary error)
+
 ### §3. Number & Quantity Notation Rules (★ Highest Priority)
 Accurately interpret numbers spoken in Korean and convert to Arabic numerals.
 
@@ -1540,8 +1636,24 @@ These rules override the terminology dictionary:
 - "챗gpt", "챗지피티" → "챗GPT"
 - "에이전트 AI" → "AI 에이전트"
 - "AI 에이전틱" → "에이전틱 AI"
-- "NVIDIA" → "엔비디아"
 - "아웃소싱" → "외주"
+
+**Well-known foreign companies → Korean form (한글 표기 우선):**
+For globally known companies whose Korean phonetic spelling is widely established,
+always use the Korean form (한글 표기), not the English form.
+- "NVIDIA" / "엔비디아" → "엔비디아"
+- "Apple" / "애플" → "애플"
+- "Amazon" / "아마존" → "아마존"
+- "Google" / "구글" → "구글"
+- "Microsoft" / "마이크로소프트" → "마이크로소프트"
+- "Meta" / "메타" → "메타"
+- "Tesla" / "테슬라" → "테슬라"
+- "Samsung" / "삼성" → "삼성"
+- "OpenAI" / "오픈AI" → "오픈AI"
+- "Anthropic" / "앤트로픽" → "앤트로픽"
+
+Never convert these Korean forms back to English (e.g., "엔비디아" → "NVIDIA" is WRONG).
+Only the English → Korean direction is valid.
 
 ### §5. Spelling & Spacing
 Fix remaining spelling, spacing, and punctuation errors.
@@ -1632,7 +1744,8 @@ The "original" field must be an **exact copy** from the source text.
 8. Output JSON ONLY — no other text.
 9. **Terminology dictionary mappings are MANDATORY. Do not ignore them.**
 10. **Number notation rules and user-specified notation rules take HIGHEST priority.**
-11. **Each word gets ONE action only: either remove OR convert, never both.**`;
+11. **Each word gets ONE action only: either remove OR convert, never both.**
+12. **NEVER change a proper noun based on your world knowledge. Only dictionary matches or phonetic STT fixes are allowed (§2a). When in doubt about any person/organization/title, preserve the original exactly.**`;
 
 function buildCorrectPrompt(analysis, customFillers, customTerms) {
   let prompt = BASE_CORRECT_PROMPT;
@@ -1696,8 +1809,45 @@ function buildCorrectPrompt(analysis, customFillers, customTerms) {
 // 코드 검증 (Step 1-V) — AI 응답의 비정상 diff 제거
 // ═══════════════════════════════════════
 
-function validateCorrections(chunkText, result) {
+// Hangul 초성/중성 분해로 음성학적 유사성 비교
+function hangulSyllables(s) {
+  const arr = [];
+  for (const ch of s) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      const idx = code - 0xAC00;
+      arr.push({ cho: Math.floor(idx / 588), jung: Math.floor((idx % 588) / 28), jong: idx % 28, raw: ch });
+    } else {
+      arr.push({ raw: ch });
+    }
+  }
+  return arr;
+}
+function isPhoneticallySimilar(a, b) {
+  if (!a || !b) return false;
+  const sa = hangulSyllables(a), sb = hangulSyllables(b);
+  if (Math.abs(sa.length - sb.length) > 1) return false;
+  const len = Math.min(sa.length, sb.length);
+  if (len === 0) return false;
+  let matchScore = 0;
+  for (let i = 0; i < len; i++) {
+    const x = sa[i], y = sb[i];
+    if (x.raw === y.raw) { matchScore += 2; continue; }
+    if (x.cho !== undefined && y.cho !== undefined) {
+      if (x.cho === y.cho && x.jung === y.jung) matchScore += 1.5;
+      else if (x.cho === y.cho) matchScore += 0.5;
+      else if (x.jung === y.jung) matchScore += 0.3;
+    }
+  }
+  return matchScore / len >= 1.0;
+}
+
+function validateCorrections(chunkText, result, termDict = []) {
   if (!result?.chunks) return result;
+
+  // 딕셔너리: wrong → correct 맵
+  const dictMap = new Map();
+  for (const t of termDict) { if (t?.wrong && t?.correct) dictMap.set(t.wrong, t.correct); }
 
   for (const chunk of result.chunks) {
     if (!chunk.changes) continue;
@@ -1751,6 +1901,27 @@ function validateCorrections(chunkText, result) {
         }
       }
 
+      // 규칙 8: 고유명사 할루시네이션 차단 (term_correction + 한글↔한글)
+      // 모델이 지식 컷오프 기반으로 한국인 인명·직책을 임의 교체하는 경우 차단.
+      // 대상: original과 corrected가 모두 한글 위주(≥70%)인 term_correction
+      // 제외: Latin↔Hangul (예: NVIDIA↔엔비디아), 숫자/혼합 표기 — 정상 표기 규칙 영향 없음
+      // 허용: (a) dictionary 명시 매핑, (b) 음성학적 유사 교정
+      if (type === "term_correction" && original && corrected) {
+        const hangulRatio = s => {
+          const h = [...s].filter(c => c.charCodeAt(0) >= 0xAC00 && c.charCodeAt(0) <= 0xD7A3).length;
+          return h / Math.max(s.length, 1);
+        };
+        const bothHangul = hangulRatio(original) >= 0.7 && hangulRatio(corrected) >= 0.7;
+        if (bothHangul) {
+          const dictAllowed = dictMap.get(original) === corrected;
+          const phoneticOk = isPhoneticallySimilar(original, corrected);
+          if (!dictAllowed && !phoneticOk) {
+            console.warn(`[V] 제거: 고유명사 할루시네이션 의심 — "${original}" → "${corrected}" (dict: ${dictAllowed}, phonetic: ${phoneticOk})`);
+            return false;
+          }
+        }
+      }
+
       return true;
     });
 
@@ -1778,7 +1949,8 @@ async function handleCorrect(body, env, headers) {
     if (result.error && result.status === 429) { await new Promise(r => setTimeout(r, (attempt+1)*3000)); continue; }
     if (result.error) return new Response(JSON.stringify({ error: result.error }), { status: result.status||500, headers });
     // v4: 코드 검증 적용
-    const validated = validateCorrections(chunk_text, result.content);
+    // v4: 코드 검증 적용 (analysis.term_corrections 를 guardrail에 전달)
+    const validated = validateCorrections(chunk_text, result.content, analysis?.term_corrections || []);
     return new Response(JSON.stringify({ success: true, result: validated, chunk_index, usage: result.usage }), { headers });
   }
   return new Response(JSON.stringify({ error: "All retries failed" }), { status: 500, headers });

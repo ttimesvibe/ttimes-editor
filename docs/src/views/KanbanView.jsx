@@ -284,7 +284,9 @@ export function KanbanView({ authUser, cfg, onSelectProject, onNewShoot, onNewPr
   projects.forEach(p => {
     if (!isMyProject(p)) return;
     const step = p.currentStep || p.step || "review";
-    if (step === "done") {
+    // 완료 판정: 새 로직에선 status 기준. 구 데이터 호환 위해 step==="done" 도 인정.
+    const isProjectDone = p.status === "done" || step === "done";
+    if (isProjectDone) {
       if (!p.parentShootId) grouped["done"].push({ type: "project", data: p });
     } else {
       const isPostProd = p.stage === "post-production";

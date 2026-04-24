@@ -15,40 +15,8 @@ export async function parseDocxWithTrackChanges(arrayBuffer) {
   if (!bodyMatch) throw new Error("문서 본문을 찾을 수 없습니다");
   const bodyXml = bodyMatch[1];
 
-  // 단락(w:p) 단위로 처리
-  const paragraphs = [];
-  const pRegex = /<w:p[ >][\s\S]*?<\/w:p>/g;
-  let pMatch;
-  while ((pMatch = pRegex.exec(bodyXml)) !== null) {
-    const pXml = pMatch[0];
-    const segments = []; // {text, deleted}
-
-    // w:del (삭제된 텍스트) 과 w:ins (삽입된 텍스트) 와 일반 w:r을 순서대로 파싱
-    // 정규식으로 순차 토큰 추출
-    const tokenRegex = /<w:del\b[^>]*>([\s\S]*?)<\/w:del>|<w:ins\b[^>]*>([\s\S]*?)<\/w:ins>|<w:r[ >]([\s\S]*?)<\/w:r>/g;
-    let tMatch;
-    while ((tMatch = tokenRegex.exec(pXml)) !== null) {
-      if (tMatch[1] !== undefined) {
-        // w:del — 삭제된 텍스트
-        const delText = extractTextFromRuns(tMatch[1]);
-        if (delText) segments.push({ text: delText, deleted: true });
-      } else if (tMatch[2] !== undefined) {
-        // w:ins — 삽입된 텍스트
-        const insText = extractTextFromRuns(tMatch[2]);
-        if (insText) segments.push({ text: insText, deleted: false });
-      } else if (tMatch[3] !== undefined) {
-        // 일반 w:r — w:strike(일반 취소선)도 삭제 처리
-        const runContent = tMatch[3];
-        const runText = extractTextFromRun(runContent);
-        const isStrike = /<w:strike\/>/.test(runContent);
-        if (runText) segments.push({ text: runText, deleted: isStrike });
-      }
-    }
-
-    if (segments.length > 0) {
-      paragraphs.push(segments);
-    }
-  }
+  // 순수 함수로 위임 (테스트 가능)
+  const paragraphs = parseBodyXml(bodyXml);
 
   // 삭제선 존재 여부 체크
   const hasTrackChanges = paragraphs.some(p => p.some(s => s.deleted));
@@ -59,6 +27,48 @@ export async function parseDocxWithTrackChanges(arrayBuffer) {
   const cleanText = paragraphs.map(p => p.filter(s => !s.deleted).map(s => s.text).join("")).join("\n");
 
   return { paragraphs, hasTrackChanges, fullText, cleanText };
+}
+
+// ═══════════════════════════════════════════════
+// 본문 XML(w:body 내부) → paragraphs 변환 — 순수 함수 (테스트 대상)
+// paragraphs: Array<Array<{text, deleted}>>
+// ═══════════════════════════════════════════════
+export function parseBodyXml(bodyXml) {
+  const paragraphs = [];
+  const pRegex = /<w:p[ >][\s\S]*?<\/w:p>/g;
+  let pMatch;
+  while ((pMatch = pRegex.exec(bodyXml)) !== null) {
+    const pXml = pMatch[0];
+    const segments = []; // {text, deleted}
+
+    // w:del (삭제된 텍스트) 과 w:ins (삽입된 텍스트) 와 일반 w:r을 순서대로 파싱.
+    // ⚠️ self-closing <w:del .../> 과 <w:ins .../> 는 단락 마크 삭제/삽입 표시로
+    //    본문 텍스트에 영향 없음. 반드시 먼저 소비(skip)해야 이후의 opening/closing
+    //    매칭이 self-closing의 `/`까지 `[^>]*`로 흡수해 다음 </w:del>까지 swallow 하는
+    //    버그를 피할 수 있음 (삭제선 오인식/shift 증상 원인). 회귀 방지 테스트:
+    //    docxParser.test.js `self-closing w:del 은 후속 텍스트를 삼키지 않는다`.
+    const tokenRegex = /<w:del\b[^>]*\/>|<w:ins\b[^>]*\/>|<w:del\b[^>]*>([\s\S]*?)<\/w:del>|<w:ins\b[^>]*>([\s\S]*?)<\/w:ins>|<w:r[ >]([\s\S]*?)<\/w:r>/g;
+    let tMatch;
+    while ((tMatch = tokenRegex.exec(pXml)) !== null) {
+      // self-closing del/ins 는 skip (tMatch[1..3] 전부 undefined)
+      if (tMatch[1] === undefined && tMatch[2] === undefined && tMatch[3] === undefined) continue;
+      if (tMatch[1] !== undefined) {
+        const delText = extractTextFromRuns(tMatch[1]);
+        if (delText) segments.push({ text: delText, deleted: true });
+      } else if (tMatch[2] !== undefined) {
+        const insText = extractTextFromRuns(tMatch[2]);
+        if (insText) segments.push({ text: insText, deleted: false });
+      } else if (tMatch[3] !== undefined) {
+        const runContent = tMatch[3];
+        const runText = extractTextFromRun(runContent);
+        const isStrike = /<w:strike\/>/.test(runContent);
+        if (runText) segments.push({ text: runText, deleted: isStrike });
+      }
+    }
+
+    if (segments.length > 0) paragraphs.push(segments);
+  }
+  return paragraphs;
 }
 
 // w:r 태그들에서 텍스트 추출

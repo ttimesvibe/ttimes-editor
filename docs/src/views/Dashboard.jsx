@@ -208,8 +208,10 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onEdit
   };
 
   // Mark project as done/undone
-  const toggleDone = async (projId, currentStep) => {
-    const newStep = currentStep === "done" ? "review" : "done";
+  // isDone 은 status 기준 (currentStep 은 작업 단계로 완료 시에도 보존됨).
+  // worker 가 step==="done" / wasDone 복원 케이스 모두 currentStep 을 건드리지 않도록 처리.
+  const toggleDone = async (projId, isDone) => {
+    const newStep = isDone ? "review" : "done";
     try {
       await fetch(`${cfg.workerUrl}/projects/update-step`, {
         method: "POST",
@@ -597,7 +599,8 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onEdit
           {/* Project Rows */}
           {!loading && projects.map((proj, idx) => {
             const step = proj.currentStep || proj.step || "review";
-            const isDone = step === "done";
+            // 완료 여부는 status 기준 (step 은 작업 단계 표시용으로 보존됨)
+            const isDone = proj.status === "done";
             const rowNum = total - ((page - 1) * PER_PAGE + idx);
             const editors = proj.editors || (proj.editor ? [proj.editor] : []);
 
@@ -623,8 +626,8 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onEdit
                   {rowNum}
                 </span>
 
-                {/* Status Badge */}
-                {renderStatusBadge(step)}
+                {/* Status Badge — 완료 탭에서 "완료" 로, 그 외엔 현재 작업 단계로 */}
+                {renderStatusBadge(isDone ? "done" : step)}
 
                 {/* Project Name */}
                 <span style={{
@@ -655,7 +658,7 @@ export function Dashboard({ authUser, cfg, onSelectProject, onNewProject, onEdit
                 {/* Actions: 완료 + 삭제 */}
                 <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                   <button
-                    onClick={(e) => { e.stopPropagation(); toggleDone(proj.id, step); }}
+                    onClick={(e) => { e.stopPropagation(); toggleDone(proj.id, isDone); }}
                     title={isDone ? "진행중으로 되돌리기" : "완료 처리"}
                     style={{
                       background: "none", border: `1px solid ${isDone ? "rgba(139,143,163,0.3)" : "rgba(34,197,94,0.3)"}`, cursor: "pointer",
