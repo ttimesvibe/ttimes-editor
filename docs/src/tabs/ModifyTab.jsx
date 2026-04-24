@@ -511,6 +511,7 @@ export function ModifyTab({ sessionId, config, onSave, currentTab, initialData, 
   function handleEdit(cardId, updates) {
     const newCards = cards.map(c => c.id === cardId ? { ...c, ...updates } : c);
     setCards(newCards);
+    saveNow(newCards); // 즉시 저장 — 편집 후 뒤로가기/새로고침 시 손실 방지
   }
 
   async function handleDelete(cardId) {
