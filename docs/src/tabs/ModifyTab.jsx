@@ -421,13 +421,41 @@ export function ModifyTab({ sessionId, config, onSave, currentTab, initialData, 
     if (!sessionId) return;
     try {
       setAutoSaveStatus("💾 저장 중...");
-      onSave?.({ videoUrl, videoId, title, cards: cardsToSave, savedAt: new Date().toISOString() });
+      await onSave?.({ videoUrl, videoId, title, cards: cardsToSave, savedAt: new Date().toISOString() });
       lastSnapshot.current = JSON.stringify(cardsToSave);
       if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); autoSaveTimer.current = null; }
       setAutoSaveStatus("✓ 저장됨");
       setTimeout(() => setAutoSaveStatus(""), 3000);
-    } catch { setAutoSaveStatus("❌ 실패"); }
+    } catch (e) {
+      console.error("수정사항 저장 실패:", e);
+      setAutoSaveStatus("❌ 저장 실패 — 새로고침 전에 다시 시도하세요");
+    }
   }, [sessionId, videoUrl, videoId, title, onSave]);
+
+  // ── pagehide/beforeunload 강제 flush (dirty 상태면 keepalive fetch로 마지막 저장) ──
+  useEffect(() => {
+    const handleUnload = () => {
+      const snap = JSON.stringify(cards);
+      if (snap === lastSnapshot.current) return; // 변경사항 없음
+      if (!sessionId || !base) return;
+      const data = { videoUrl, videoId, title, cards, savedAt: new Date().toISOString() };
+      const _tk = localStorage.getItem("ttimes_token");
+      try {
+        fetch(`${base}/save`, {
+          method: "POST",
+          keepalive: true,
+          headers: { "Content-Type": "application/json", ...(_tk ? { "Authorization": `Bearer ${_tk}` } : {}) },
+          body: JSON.stringify({ id: sessionId, tab: "modify", data }),
+        }).catch(() => {});
+      } catch {}
+    };
+    window.addEventListener("pagehide", handleUnload);
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      window.removeEventListener("pagehide", handleUnload);
+      window.removeEventListener("beforeunload", handleUnload);
+    };
+  }, [sessionId, base, cards, videoUrl, videoId, title]);
 
   function handlePlayerReady(player) {
     playerRef.current = player;

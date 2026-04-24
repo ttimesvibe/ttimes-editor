@@ -2115,9 +2115,11 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           keywords={anal?.overview?.keywords || []}
           currentTab={tab}
           initialData={exportCache.setgen}
-          onSave={(data) => {
+          onSave={async (data) => {
             setExportCache(prev => ({ ...prev, setgen: data }));
-            if (sessionId) apiSaveTab(sessionId, "setgen", data, cfg, fn).catch(()=>{});
+            if (!sessionId) return;
+            try { await apiSaveTab(sessionId, "setgen", data, cfg, fn); }
+            catch (e) { console.error("세트 저장 실패:", e); setErr("세트 저장 실패: " + e.message); throw e; }
           }}
         />
       </div>}
@@ -2131,9 +2133,11 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           config={cfg}
           currentTab={tab}
           initialData={exportCache.visual}
-          onSave={(data) => {
+          onSave={async (data) => {
             setExportCache(prev => ({ ...prev, visual: data }));
-            if (sessionId) apiSaveTab(sessionId, "visual", data, cfg, fn).catch(()=>{});
+            if (!sessionId) return;
+            try { await apiSaveTab(sessionId, "visual", data, cfg, fn); }
+            catch (e) { console.error("자료·그래픽 저장 실패:", e); setErr("자료·그래픽 저장 실패: " + e.message); throw e; }
           }}
         />
       </div>}
@@ -2146,9 +2150,11 @@ function AuthenticatedApp({ authUser, onLogout, initialSessionId, onBackToDashbo
           currentTab={tab}
           initialData={exportCache.modify}
           authUser={authUser}
-          onSave={(data) => {
+          onSave={async (data) => {
             setExportCache(prev => ({ ...prev, modify: data }));
-            if (sessionId) apiSaveTab(sessionId, "modify", data, cfg, fn).catch(()=>{});
+            if (!sessionId) return;
+            try { await apiSaveTab(sessionId, "modify", data, cfg, fn); }
+            catch (e) { console.error("수정사항 저장 실패:", e); setErr("수정사항 저장 실패: " + e.message); throw e; }
           }}
         />
       </div>}
